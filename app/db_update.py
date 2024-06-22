@@ -16,13 +16,23 @@ DB table updates: Updates the corresponding entries in the MySQL database
 
 DB tables which are getting updated:
 
-1. `callbot_response_callback`;
-2. `callbot_response_accepted`;
-3. `callbot_response_accepted_pickupdrop`;
-4. `callbot_response_declined_pickupdrop`;
-5. `callbot_response_invalidoptioninput`;
-6. `callbot_response_noanswer`;
-7. `callbot_reminder_status`;
+DEV tables to handle the buckets
+1. table1 = `callbot_response_callback`;
+2. table2 = `callbot_response_accepted`;
+3. table3 = `callbot_response_accepted_pickupdrop`;
+4. table4 = `callbot_response_declined_pickupdrop`;
+5. table5 = `callbot_response_invalidoptioninput`;
+6. table6 = `callbot_response_noanswer`;
+7. table7 = `callbot_reminder_status`;
+
+PROD tables to handle the buckets
+1. table1="callbot_response_callback_PROD"
+2. table2="callbot_response_accepted_PROD"
+3. table3="callbot_response_accepted_pickupdrop_PROD"
+4. table4="callbot_response_declined_pickupdrop_PROD"
+5. table5="callbot_response_invalidoptioninput_PROD"
+6. table6="callbot_response_noanswer_PROD"
+7. table7="callbot_reminder_status_PROD"
 
 """
 
@@ -34,25 +44,10 @@ from io import StringIO
 import warnings
 from datetime import datetime
 import sys
+from .config import table1, table2, table3, table4, table5, table6, table7, config, connect_str, container_name
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
-
-#-------------------------------------------------------------------------------------------------------
-# Configuration and Initialization
-#-------------------------------------------------------------------------------------------------------
-
-# Azure Blob Storage credentials
-connect_str = "DefaultEndpointsProtocol=https;AccountName=opengovchatbot;AccountKey=B/2pwkRxYX+LkcJ0baRiUYoYN9NoPUHD/zTCmCZjQRUo5GxVkk+KRVvjGVqrp7DlPlK9LUGhZiwm+ASteyEKCQ==;EndpointSuffix=core.windows.net"
-container_name = "opengovchatbot"
-
-# MySQL Database configuration
-config = {
-    'host': 'opengovasiatestdb.mysql.database.azure.com',
-    'user': 'hywhuftmvq',
-    'password': 'E8SI50E417T2L3F2$',
-    'database': 'ogapp'
-}
 
 # Initialize the BlobServiceClient
 blob_service_client = BlobServiceClient.from_connection_string(connect_str)
@@ -214,13 +209,13 @@ def download_blob_to_df():
     Result_reminder = create_df(lst=accepted_lst, df=df, string='reminder')
     
     return {
-        "callbot_response_callback": Result_Callback,
-        "callbot_response_accepted": Result_accepted,
-        "callbot_response_accepted_pickupdrop": Result_pickup_accepted,
-        "callbot_response_declined_pickupdrop": Result_pickup_declinded,
-        "callbot_response_invalidoptioninput": Result_invalidoptioninput,
-        "callbot_response_noanswer": Result_NoAnswer,
-        "callbot_reminder_status": Result_reminder
+        table1: Result_Callback,
+        table2: Result_accepted,
+        table3: Result_pickup_accepted,
+        table4: Result_pickup_declinded,
+        table5: Result_invalidoptioninput,
+        table6: Result_NoAnswer,
+        table7: Result_reminder
     }
 
 # Insert data into the table
@@ -280,7 +275,3 @@ def submain():
             conn.close()
     else:
         print("Error: Could not establish a connection to the database")
-
-# Uncomment the following line to run the script directly
-# if __name__ == "__main__":
-#     main()

@@ -74,15 +74,3 @@ def append_to_blob(blob_name, data):
             logging.info(f"Data appended to Azure Blob Storage as {blob_name}.")
         except Exception as e:
             logging.error(f"Error appending to Azure Blob Storage: {e}")
-
-
-# # Call to the python script which will update the database from blob
-# def run_blob_update():
-#     """
-#     Executes the `blob_update` script to synchronize the database with the latest data from blob storage.
-
-#     This function serves as a wrapper that calls the main function of the `blob_update` module.
-#     It is typically scheduled to run periodically to keep the database updated with new data from
-#     the blob storage.
-#     """
-#     main()

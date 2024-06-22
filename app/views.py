@@ -17,7 +17,7 @@ Response Generation: Returns HTML templates or JSON responses.
 
 """
 
-
+import re
 import logging
 from flask import request, Response, jsonify, render_template
 from .db_connect import get_db_connection, create_table_if_not_exists
@@ -28,7 +28,7 @@ from .utils import get_current_csv_blob_name, log_response
 from .blob_operations import write_csv_header, append_to_blob
 from twilio.twiml.voice_response import VoiceResponse, Gather
 from datetime import datetime
-from .config import twilio_number, voice_change
+from .config import twilio_number, voice_change, registration_table
 from .db_update import main
 
 
@@ -60,7 +60,7 @@ def index_view():
     conn = get_db_connection()
     if conn:
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT eventID, eventName, eventLocation, eventDate FROM callbot_event_registration")
+        cursor.execute(f"SELECT eventID, eventName, eventLocation, eventDate FROM {registration_table}")
         events = cursor.fetchall()
         cursor.close()
         conn.close()
@@ -84,7 +84,7 @@ def get_events_view():
     conn = get_db_connection()
     if conn:
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT eventID, eventName, eventLocation, eventDate FROM callbot_event_registration")
+        cursor.execute(f"SELECT eventID, eventName, eventLocation, eventDate FROM {registration_table}")
         events = cursor.fetchall()
         cursor.close()
         conn.close()
@@ -127,7 +127,7 @@ def save_event_view():
         cursor = conn.cursor()
 
         # Check for duplicate event name
-        cursor.execute("SELECT COUNT(*) FROM callbot_event_registration WHERE eventName = %s", (event_name,))
+        cursor.execute(f"SELECT COUNT(*) FROM {registration_table} WHERE eventName = %s", (event_name,))
         if cursor.fetchone()[0] > 0:
             cursor.close()
             conn.close()
@@ -146,7 +146,7 @@ def save_event_view():
         attendees_data = ';'.join([f"{attendee['attendeeName']}:{attendee['attendeePhone']}" for attendee in attendees])
 
         cursor.execute(
-            "INSERT INTO callbot_event_registration (eventName, eventLocation, eventSummary, eventDate, eventTime, attendees) VALUES (%s, %s, %s, %s, %s, %s)",
+            f"INSERT INTO {registration_table} (eventName, eventLocation, eventSummary, eventDate, eventTime, attendees) VALUES (%s, %s, %s, %s, %s, %s)",
             (event_name, event_location, event_summary, event_date, event_time, attendees_data)
         )
         conn.commit()
@@ -158,6 +158,22 @@ def save_event_view():
         return render_template('callbotUI_V6.html', status='success', message='Event saved successfully', event_id=event_id)
     else:
         return render_template('callbotUI_V6.html', status='error', message='Could not establish a connection to the database')
+
+
+def is_valid_singapore_mobile(number):
+    """
+    Check if the given number is a valid Singapore mobile number.
+    A valid Singapore mobile number starts with '65' followed by 8 digits.
+
+    Args:
+    number (str): The mobile number to validate.
+
+    Returns:
+    bool: True if the number is valid, False otherwise.
+    """
+    pattern = r'^65\d{8}$'
+    return bool(re.match(pattern, str(number)))
+
 
 
 # @app.route('/trigger_initial_call', methods=['POST'])
@@ -178,7 +194,7 @@ def trigger_initial_call_view():
         cursor = conn.cursor()
         
         # Retrieve event details from the database
-        cursor.execute("SELECT * FROM callbot_event_registration WHERE eventID = %s", (event_id,))
+        cursor.execute(f"SELECT * FROM {registration_table} WHERE eventID = %s", (event_id,))
         event = cursor.fetchone()
 
         if event:
@@ -198,6 +214,14 @@ def trigger_initial_call_view():
 
             # Convert the attendees list to a DataFrame
             df_attendees = pd.DataFrame(attendees)
+
+            # Apply the validation function to the DataFrame column
+            # df_attendees['is_valid'] = df_attendees['attendeePhone'].apply(is_valid_singapore_mobile)
+            
+            # Split the DataFrame into two based on the validation results
+            # valid_numbers_df = df_attendees[df_attendees['is_valid']].drop(columns=['is_valid'])
+            # invalid_numbers_df = df_attendees[~df_attendees['is_valid']].drop(columns=['is_valid'])
+            # df_attendees = valid_numbers_df
 
             # Loop over each attendee and make the call
             for idx, row in df_attendees.iterrows():

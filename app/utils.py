@@ -27,6 +27,8 @@ import csv
 from .config import twilio_number
 from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
 import io
+from functools import wraps
+from flask import session, redirect, url_for
 
 # Define CSV file path and lock
 csv_lock = threading.Lock()
@@ -34,6 +36,16 @@ csv_lock = threading.Lock()
 # Azure Blob Storage configurations
 AZURE_CONNECTION_STRING = 'your_connection_string'
 AZURE_CONTAINER_NAME = 'your_container_name'
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'email' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 
 # blob / csv file name
 def get_current_csv_blob_name():

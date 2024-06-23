@@ -17,7 +17,7 @@ Blob Management: Additional functionality for managing blobs.
 """
 
 
-from . import blob_service_client, container_name
+from .config import container_name,blob_service_client
 import logging
 import threading
 

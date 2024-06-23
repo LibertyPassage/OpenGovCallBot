@@ -101,11 +101,11 @@ def create_table_if_not_exists(conn, table_name):
             Response TEXT,
             Attendee_Name VARCHAR(250),
             Event_Date DATETIME,
-            Event_Name VARCHAR(250),
-            Event_Venue VARCHAR(250),
+            Event_Name VARCHAR(500),
+            Event_Venue VARCHAR(500),
             Call_Type VARCHAR(50),
             Event_ID INT,
-            Event_Summary VARCHAR(2500),
+            Event_Summary TEXT,
             Event_Time TIME
         )
     ''')

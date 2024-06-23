@@ -18,15 +18,13 @@ Call Functionality: Initiates calls, handles responses, and logs results.
 """
 
 
-
-from . import client, blob_service_client
 # from .utils import get_current_csv_blob_name
 from datetime import datetime
 import urllib.parse
 import logging
 import uuid
 from twilio.twiml.voice_response import VoiceResponse, Gather
-from .config import account_sid, auth_token, connect_str, container_name,ngrok_url,twilio_number
+from .config import account_sid, auth_token, connect_str, container_name,ngrok_url,twilio_number,client
 # from .blob_operations import append_to_blob, write_csv_header
 from .blob_operations import write_csv_header, append_to_blob
 

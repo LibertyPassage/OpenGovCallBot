@@ -20,6 +20,8 @@ from dotenv import load_dotenv
 import os
 from azure.identity import ClientSecretCredential
 from azure.keyvault.secrets import SecretClient
+from twilio.rest import Client
+from azure.storage.blob import BlobServiceClient
 
 # Azure Key vault connections
 load_dotenv()
@@ -35,14 +37,20 @@ secret_client = SecretClient(vault_url=vault_url, credential=credential)
 
 # Twilio credentials
 # secret_name = "twilioaccountsid1"
-account_sid = secret_client.get_secret("twilioaccountsid1").value
+# account_sid = secret_client.get_secret("twilioaccountsid1").value
+
 
 # secret_name='twilioauthtoken'
-auth_token = secret_client.get_secret('twilioauthtoken').value
+# auth_token = secret_client.get_secret('twilioauthtoken').value
+
 
 # Azure Blob Storage credentials
 connect_str = secret_client.get_secret('connectstrblob').value
 container_name = "opengovchatbot"
+
+client = Client(account_sid, auth_token)
+blob_service_client = BlobServiceClient.from_connection_string(connect_str)
+
 
 # MySQL database credentials
 config = {
@@ -53,10 +61,10 @@ config = {
     }
 
 # Twilio credentials
-twilio_number = '+12063177643'
+twilio_number = '+13202722061'
 
 # Dev URL
-ngrok_url = 'https://bead-2401-4900-1cb9-157a-9481-546c-c919-70ad.ngrok-free.app'
+ngrok_url = 'https://883e-86-44-114-226.ngrok-free.app'
 
 # PROD URL
 # ngrok_url = 'https://opengovcallbot.azurewebsites.net/'

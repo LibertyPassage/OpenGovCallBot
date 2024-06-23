@@ -18,13 +18,24 @@ Database Initialization: Sets up the database connection.
 """
 from flask import Flask
 import logging
-from twilio.rest import Client
-from azure.storage.blob import BlobServiceClient
-from .config import account_sid, auth_token, connect_str, container_name
+from flask_sqlalchemy import SQLAlchemy
+
+
+#from app.db_connect import get_db_connection
+
+from .config import account_sid, auth_token, connect_str, container_name,config
 
 app = Flask(__name__)
-logging.basicConfig(level=logging.DEBUG)
-client = Client(account_sid, auth_token)
-blob_service_client = BlobServiceClient.from_connection_string(connect_str)
+# Configuration
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Initialize the database
+db = SQLAlchemy(app)
+# Import the routes and models
+from app import routes, models
+with app.app_context():
+    db.create_all()
 
-from . import routes  # Import routes here to avoid circular imports
+logging.basicConfig(level=logging.DEBUG)
+
+
+#from . import routes  # Import routes here to avoid circular imports

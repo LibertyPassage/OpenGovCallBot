@@ -123,7 +123,13 @@ def save_event_view():
 
         # Replace commas with periods in event_summary
         if event_summary:
-            event_summary = event_summary.replace(',', '.')
+            event_summary = event_summary.replace(',', '.').replace("'", '')
+
+        if event_location:
+            event_location = event_location.replace("'", '')
+
+        if event_name:
+            event_name = event_name.replace("'", '')
 
         # Restrict commas in event_name and event_location
         if ',' in event_name:
@@ -174,7 +180,7 @@ def save_event_view():
             attendees = df.to_dict('records')
 
         attendees_data = ';'.join([f"{attendee['attendeeName']}:{attendee['attendeePhone']}" for attendee in attendees])
-        logging.info(f'Attendees data: {attendees_data}')
+        # logging.info(f'Attendees data: {attendees_data}')
 
         cursor.execute(
             "INSERT INTO callbot_event_registration (eventName, eventLocation, eventSummary, eventDate, eventTime, attendees) VALUES (%s, %s, %s, %s, %s, %s)",
@@ -365,7 +371,7 @@ def voice_view():
         resp = VoiceResponse()
         gather = Gather(action='/gather', num_digits=1)
         gather.say(
-            f"Hello {first_name}, This is the Open GOV Bot calling on behalf of the organizing committee for event, {event_name}. We are delighted to invite you to our, {event_summary}, on {event_date} at {eventTime}, to be held at {event_venue}. Your presence would be an honor and greatly enrich the event with your valuable insights. To accept this invitation, please press 1. To request a callback, press 2.",
+            f"Hello {first_name}, This is the Open GOV Bot calling on behalf of the organizing committee for an event. We are delighted to invite you to our upcoming event, {event_name}! Taking place on {event_date} at {eventTime} Malaysia Standard Time. This event promises to be an insightful experience held at {event_venue}. Here’s a brief overview: {event_summary}. We believe your presence will add immense value, and we would be honored to have you with us. To confirm your attendance, please press 1. If you need a callback for more details, press 2.",
             voice=voice_change
         )
 
@@ -652,7 +658,7 @@ def reminder_view():
             # Create a Twilio VoiceResponse for the reminder
             resp = VoiceResponse()
             resp.say(
-                f"Hello {first_name}, as a valued registered participant, this is a reminder from the OpenGov call bot regarding the upcoming event, {event_name}, scheduled date {event_date} at {event_time}, to be held at {event_venue}. Thank you.",
+                f"Hello {first_name}, as a valued registered participant, this is a reminder from the OpenGov call bot regarding the upcoming event, {event_name}. scheduled date {event_date} at {event_time} Malaysia Standard Time. To be held at {event_venue}. Thank you.",
                 voice=voice_change
             )
     

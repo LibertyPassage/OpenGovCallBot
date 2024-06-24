@@ -68,11 +68,11 @@ config = {
 twilio_number = '+13202722061'
 
 # Dev URL
-ngrok_url = 'https://a2f5-2401-4900-1cb9-157a-c92e-88b7-cf52-b03.ngrok-free.app'
+# ngrok_url = 'https://a2f5-2401-4900-1cb9-157a-c92e-88b7-cf52-b03.ngrok-free.app'
 
 # PROD URL
 ProdURL = secret_client.get_secret('ProdURL').value
-# ngrok_url = ProdURL
+ngrok_url = ProdURL
 
 # Voice change string
 voice_change = "Polly.Aditi"

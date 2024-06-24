@@ -17,8 +17,6 @@ CRUD Operations: Functions to create, read, update, and delete database records.
 
 """
 
-
-
 import mysql.connector
 from mysql.connector import errorcode
 from .config import config, registration_table
@@ -69,9 +67,9 @@ def create_table_if_not_exists():
         cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS {registration_table} (
                 eventID INT AUTO_INCREMENT PRIMARY KEY,
-                eventName VARCHAR(250) NOT NULL UNIQUE,
-                eventLocation VARCHAR(250) NOT NULL,
-                eventSummary VARCHAR(500) NOT NULL,
+                eventName VARCHAR(500) NOT NULL UNIQUE,
+                eventLocation VARCHAR(500) NOT NULL,
+                eventSummary TEXT NOT NULL,
                 eventDate VARCHAR(50) NOT NULL,
                 eventTime VARCHAR(50) NOT NULL,
                 attendees TEXT NOT NULL,

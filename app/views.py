@@ -19,7 +19,9 @@ Response Generation: Returns HTML templates or JSON responses.
 
 import re
 import logging
-from flask import request, Response, jsonify, render_template
+from flask import flash, redirect, request, Response, jsonify, render_template, session, url_for
+
+from app.models import User
 from .db_connect import get_db_connection, create_table_if_not_exists
 from .twilio_calls import make_call,call_guid_map
 from .utils import secure_filename, log_response
@@ -30,6 +32,11 @@ from twilio.twiml.voice_response import VoiceResponse, Gather
 from datetime import datetime
 from .config import twilio_number, voice_change, registration_table
 from .db_update import main
+from werkzeug.security import generate_password_hash, check_password_hash
+from app.models import User,db_temp
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 
 
@@ -38,7 +45,6 @@ logging.basicConfig(level=logging.DEBUG)
 
 # Initialize table flag
 table_initialized = True
-
 
 def index_view():
     """
@@ -107,46 +113,71 @@ def save_event_view():
     Returns:
         Renders the callbotUI_V6.html with appropriate status and messages.
     """
-    event_name = request.form['eventName']
-    event_location = request.form['eventLocation']
-    event_summary = request.form['eventSummary']
-    event_date = request.form['eventDate']
-    event_time = request.form['eventTime']
-    attendees_file = request.files['attendeesFile']
+    try:
+        event_name = request.form.get('eventName')
+        event_location = request.form.get('eventLocation')
+        event_summary = request.form.get('eventSummary')
+        event_date = request.form.get('eventDate')
+        event_time = request.form.get('eventTime')
+        attendees_file = request.files.get('attendeesFile')
 
-    # Input validation
-    if len(event_name) > 250:
-        return render_template('callbotUI_V6.html', status='error', message='Event Name must not exceed 250 characters')
-    if len(event_location) > 250:
-        return render_template('callbotUI_V6.html', status='error', message='Event Location must not exceed 250 characters')
-    if len(event_summary) > 500:
-        return render_template('callbotUI_V6.html', status='error', message='Event Summary must not exceed 500 characters')
+        # Replace commas with periods in event_summary
+        if event_summary:
+            event_summary = event_summary.replace(',', '.')
 
-    conn = get_db_connection()
-    if conn:
+        # Restrict commas in event_name and event_location
+        if ',' in event_name:
+            return jsonify(status='error', message='Event Name must not contain commas.')
+        if ',' in event_location:
+            return jsonify(status='error', message='Event Location must not contain commas.')
+
+        # Input validation
+        if not event_name:
+            return jsonify(status='error', message='Event name is a mandatory field.')
+        if not event_location:
+            return jsonify(status='error', message='Event location is a mandatory field.')
+        if not event_summary:
+            return jsonify(status='error', message='Event summary is a mandatory field.')
+        if not event_date:
+            return jsonify(status='error', message='Event date is a mandatory field.')
+        if not event_time:
+            return jsonify(status='error', message='Event time is a mandatory field.')
+        if not attendees_file:
+            return jsonify(status='error', message='Attendees file is a mandatory field.')
+
+        if len(event_name) > 500:
+            return jsonify(status='error', message='Event Name must not exceed 250 characters.')
+        if len(event_location) > 250:
+            return jsonify(status='error', message='Event Location must not exceed 250 characters.')
+
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         # Check for duplicate event name
-        cursor.execute(f"SELECT COUNT(*) FROM {registration_table} WHERE eventName = %s", (event_name,))
+        cursor.execute("SELECT COUNT(*) FROM callbot_event_registration WHERE eventName = %s", (event_name,))
         if cursor.fetchone()[0] > 0:
             cursor.close()
             conn.close()
-            return render_template('callbotUI_V6.html', status='error', message='Event Name already exists')
+            return jsonify(status='error', message='Event Name already exists.')
 
         attendees = []
         if attendees_file:
-            file_extension = secure_filename(attendees_file.filename).split('.')[-1]
-            if file_extension == 'xlsm':
+            file_extension = secure_filename(attendees_file.filename).split('.')[-1].lower()
+            logging.info(f'File extension: {file_extension}')
+            if file_extension == 'xlsx':
                 df = pd.read_excel(attendees_file, engine='openpyxl')
+            elif file_extension == 'csv':
+                df = pd.read_csv(attendees_file)
             else:
-                return render_template('callbotUI_V6.html', status='error', message='Unsupported file format. Please upload an .xlsm file.')
+                return jsonify(status='error', message='Unsupported file format. Please upload a .csv or .xlsx file.')
 
             attendees = df.to_dict('records')
 
         attendees_data = ';'.join([f"{attendee['attendeeName']}:{attendee['attendeePhone']}" for attendee in attendees])
+        logging.info(f'Attendees data: {attendees_data}')
 
         cursor.execute(
-            f"INSERT INTO {registration_table} (eventName, eventLocation, eventSummary, eventDate, eventTime, attendees) VALUES (%s, %s, %s, %s, %s, %s)",
+            "INSERT INTO callbot_event_registration (eventName, eventLocation, eventSummary, eventDate, eventTime, attendees) VALUES (%s, %s, %s, %s, %s, %s)",
             (event_name, event_location, event_summary, event_date, event_time, attendees_data)
         )
         conn.commit()
@@ -155,11 +186,15 @@ def save_event_view():
         cursor.close()
         conn.close()
 
-        return render_template('callbotUI_V6.html', status='success', message='Event saved successfully', event_id=event_id)
-    else:
-        return render_template('callbotUI_V6.html', status='error', message='Could not establish a connection to the database')
+        return jsonify(status='success', message='Event saved successfully', event_id=event_id)
 
-
+    except KeyError as e:
+        logging.error(f'Missing form field: {e.args[0]}')
+        return jsonify(status='error', message=f'Missing form field: {e.args[0]}')
+    except Exception as e:
+        logging.error(f'Error occurred: {str(e)}')
+        return jsonify(status='error', message='An error occurred while saving the event. Please try again.')
+    
 def is_valid_singapore_mobile(number):
     """
     Check if the given number is a valid Singapore mobile number.
@@ -174,8 +209,6 @@ def is_valid_singapore_mobile(number):
     pattern = r'^65\d{8}$'
     return bool(re.match(pattern, str(number)))
 
-
-
 # @app.route('/trigger_initial_call', methods=['POST'])
 def trigger_initial_call_view():
     """
@@ -186,72 +219,71 @@ def trigger_initial_call_view():
     `make_call` function.
 
     Returns:
-        Renders the callbotUI_V6.html with appropriate status and messages.
+        JSON response with appropriate status and messages.
     """
-    event_id = request.form['event_id']
-    conn = get_db_connection()
-    if conn:
-        cursor = conn.cursor()
-        
-        # Retrieve event details from the database
-        cursor.execute(f"SELECT * FROM {registration_table} WHERE eventID = %s", (event_id,))
-        event = cursor.fetchone()
-
-        if event:
-            # Parse attendees from the event details
-            attendees = event[6].split(';')
-            attendees = [{'attendeeName': a.split(':')[0], 'attendeePhone': a.split(':')[1]} for a in attendees]
-
-            event_details = {
-                'eventName': event[1],
-                'eventSummary': event[3],
-                'eventLocation': event[2],
-                'eventDate': event[4],
-                'eventTime': event[5],
-                'attendees': attendees,
-                'event_id': event_id
-            }
-
-            # Convert the attendees list to a DataFrame
-            df_attendees = pd.DataFrame(attendees)
-
-            # Apply the validation function to the DataFrame column
-            # df_attendees['is_valid'] = df_attendees['attendeePhone'].apply(is_valid_singapore_mobile)
+    try:
+        event_id = request.form['event_id']
+        conn = get_db_connection()
+        if conn:
+            cursor = conn.cursor()
             
-            # Split the DataFrame into two based on the validation results
-            # valid_numbers_df = df_attendees[df_attendees['is_valid']].drop(columns=['is_valid'])
-            # invalid_numbers_df = df_attendees[~df_attendees['is_valid']].drop(columns=['is_valid'])
-            # df_attendees = valid_numbers_df
+            # Retrieve event details from the database
+            cursor.execute(f"SELECT * FROM {registration_table} WHERE eventID = %s", (event_id,))
+            event = cursor.fetchone()
 
-            # Loop over each attendee and make the call
-            for idx, row in df_attendees.iterrows():
-                attendee_phonenumber=row["attendeePhone"]
-                print("attendee_phonenumber",len(attendee_phonenumber))
-                make_call(
-                    attendee_phonenumber=row["attendeePhone"],
-                    attendee_name=row["attendeeName"],
-                    event_date=event_details.get('eventDate'),
-                    event_name=event_details.get('eventName'),
-                    event_summary=event_details.get('eventSummary'),
-                    event_venue=event_details.get('eventLocation'),
-                    eventTime=event_details.get('eventTime'),
-                    call_type="initial",
-                    event_id=event_details.get('event_id')
-                )
+            if event:
+                # Parse attendees from the event details
+                attendees = event[6].split(';')
+                attendees = [{'attendeeName': a.split(':')[0], 'attendeePhone': a.split(':')[1]} for a in attendees]
 
-            cursor.close()
-            conn.close()
+                event_details = {
+                    'eventName': event[1],
+                    'eventSummary': event[3],
+                    'eventLocation': event[2],
+                    'eventDate': event[4],
+                    'eventTime': event[5],
+                    'attendees': attendees,
+                    'event_id': event_id
+                }
 
-            return render_template('callbotUI_V6.html', status='success', message='Initial call triggered successfully')
+                # Convert the attendees list to a DataFrame
+                df_attendees = pd.DataFrame(attendees)
+
+                # Loop over each attendee and make the call
+                for idx, row in df_attendees.iterrows():
+                    make_call(
+                        attendee_phonenumber=row["attendeePhone"],
+                        attendee_name=row["attendeeName"],
+                        event_date=event_details.get('eventDate'),
+                        event_name=event_details.get('eventName'),
+                        event_summary=event_details.get('eventSummary'),
+                        event_venue=event_details.get('eventLocation'),
+                        eventTime=event_details.get('eventTime'),
+                        call_type="initial",
+                        event_id=event_details.get('event_id')
+                    )
+
+                cursor.close()
+                conn.close()
+
+                return jsonify(status='success', message='Initial call triggered successfully')
+            else:
+                cursor.close()
+                conn.close()
+                return jsonify(status='error', message='Event not found')
         else:
-            cursor.close()
-            conn.close()
-            return render_template('callbotUI_V6.html', status='error', message='Event not found')
-    else:
-        return render_template('callbotUI_V6.html', status='error', message='Could not establish a connection to the database')
-
+            return jsonify(status='error', message='Could not establish a connection to the database')
+    except Exception as e:
+        logging.error(f'Error occurred: {str(e)}')
+        return jsonify(status='error', message='An error occurred while triggering the initial call. Please try again.')
 
 # @app.route('/trigger_reminder_call', methods=['POST'])
+from flask import request, jsonify
+import pandas as pd
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
 def trigger_reminder_call_view():
     """
     Triggers reminder calls for attendees who have accepted the initial call invitation.
@@ -263,41 +295,48 @@ def trigger_reminder_call_view():
     Returns:
         JSON response indicating the status of the operation.
     """
-    event_id = request.form['event_id']
-    conn = get_db_connection()
-    if conn:
-        cursor = conn.cursor()
-        
-        # Retrieve attendees who accepted the initial call from the database
-        cursor.execute("SELECT * FROM callbot_response_accepted WHERE Event_ID = %s", (event_id,))
-        results = cursor.fetchall()
-        column_names = [desc[0] for desc in cursor.description]  # Get column names from cursor description
-        
-        cursor.close()
-        conn.close()
-        
-        # Create DataFrame and clean it to remove duplicate recipient numbers
-        df = pd.DataFrame(results, columns=column_names)
-        df_cleaned = df.drop_duplicates(subset=['Recipient_Number'])
-        df_cleaned['Event_Time'] = df_cleaned['Event_Time'].astype(str).apply(lambda x: x.split(" ")[-1])
+    try:
+        event_id = request.form['event_id']
+        conn = get_db_connection()
+        if conn:
+            cursor = conn.cursor()
+            
+            # Retrieve attendees who accepted the initial call from the database
+            cursor.execute("SELECT * FROM callbot_response_accepted WHERE Event_ID = %s", (event_id,))
+            results = cursor.fetchall()
+            column_names = [desc[0] for desc in cursor.description]  # Get column names from cursor description
+            
+            cursor.close()
+            conn.close()
+            
+            if results:
+                # Create DataFrame and clean it to remove duplicate recipient numbers
+                df = pd.DataFrame(results, columns=column_names)
+                df_cleaned = df.drop_duplicates(subset=['Recipient_Number'])
+                df_cleaned['Event_Time'] = df_cleaned['Event_Time'].astype(str).apply(lambda x: x.split(" ")[-1])
 
-        # Loop over each attendee and make the reminder call
-        for idx, row in df_cleaned.iterrows():
-            make_call(
-                attendee_phonenumber=row["Recipient_Number"],
-                attendee_name=row["Attendee_Name"],
-                event_name=row["Event_Name"],
-                event_summary=row["Event_Summary"],
-                event_date=row["Event_Date"],
-                event_venue=row["Event_Venue"],
-                call_type='reminder',
-                event_id=row["Event_ID"],
-                eventTime=row["Event_Time"]
-            )
-        
-        return render_template('callbotUI_V6.html', status='success', message='Reminder call triggered successfully')
-    else:
-        return render_template('callbotUI_V6.html', status='error', message='Could not establish a connection to the database')
+                # Loop over each attendee and make the reminder call
+                for idx, row in df_cleaned.iterrows():
+                    make_call(
+                        attendee_phonenumber=row["Recipient_Number"],
+                        attendee_name=row["Attendee_Name"],
+                        event_name=row["Event_Name"],
+                        event_summary=row["Event_Summary"],
+                        event_date=row["Event_Date"],
+                        event_venue=row["Event_Venue"],
+                        call_type='reminder',
+                        event_id=row["Event_ID"],
+                        eventTime=row["Event_Time"]
+                    )
+                
+                return jsonify(status='success', message='Reminder call triggered successfully')
+            else:
+                return jsonify(status='error', message='No attendees found for this event')
+        else:
+            return jsonify(status='error', message='Could not establish a connection to the database')
+    except Exception as e:
+        logging.error(f'Error occurred: {str(e)}')
+        return jsonify(status='error', message='An error occurred while triggering the reminder call. Please try again.')
 
 
 def voice_view():
@@ -635,4 +674,262 @@ def reminder_view():
             logging.error(f"Error in /reminder: {e}")
             return str(VoiceResponse().say("An application error occurred.", voice=voice_change))
     
+#Login,signup and logout logic
+def home_view():
+    """
+    View function for the home page.
     
+    Renders the main user interface of the application.
+    
+    Returns:
+        A rendered template of the 'callbotUI_V6.html' file.
+    """
+    return render_template('callbotUI_V6.html')
+
+def login_view():
+    """
+    View function for the login page.
+    
+    Handles user authentication. If the request method is POST, it checks the
+    user's credentials and logs them in if valid.
+    
+    Returns:
+        - If GET: A rendered template of the 'login.html' file.
+        - If POST: Redirects to the index page on successful login, or
+          flashes an error message on failure.
+    """
+    if request.method == 'POST':
+        # Retrieve email and password from the submitted form.
+        email = request.form['email']
+        password = request.form['password']
+        
+        # Query the database for the user by email.
+        user = User.query.filter_by(email=email).first()
+        
+        # Verify the password and check if the user exists.
+        if user and check_password_hash(user.password, password):
+            # Store user information in the session.
+            session['email'] = email
+            session['is_admin'] = user.is_admin
+            return redirect(url_for('index'))
+        else:
+            # Flash an error message for invalid credentials.
+            flash('Invalid credentials. Please try again.', 'error')
+    
+    # Render the login page template.
+    return render_template('login.html')
+
+def signup_view():
+    """
+    View function for the signup page.
+    
+    Handles user registration. If the request method is POST, it creates a 
+    new user if the email does not already exist.
+    
+    Returns:
+        - If GET: A rendered template of the 'signup.html' file.
+        - If POST: Redirects to the index page on successful registration, or
+          flashes an error message if the user already exists.
+    """
+    if request.method == 'POST':
+        # Retrieve email and password from the submitted form.
+        email = request.form['email']
+        password = request.form['password']
+        
+        # Check if the user already exists in the database.
+        user = User.query.filter_by(email=email).first()
+        if user:
+            # Flash an error message if the user already exists.
+            flash('User already exists. Please log in.', 'error')
+        else:
+            # Hash the password and create a new user.
+            hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
+            new_user = User(email=email, password=hashed_password)
+            
+            # Add the new user to the database and commit the transaction.
+            db_temp.session.add(new_user)
+            db_temp.session.commit()
+            
+            # Store user information in the session.
+            session['email'] = email
+            return redirect(url_for('index'))
+    
+    # Render the signup page template.
+    return render_template('signup.html')
+
+def logout_view():
+    """
+    View function for logging out.
+    
+    Removes user information from the session.
+    
+    Returns:
+        A redirect to the login page.
+    """
+    # Remove 'email' from the session to log out the user.
+    session.pop('email', None)
+    return redirect(url_for('login'))
+
+def admin_view():
+    """
+    View function for the admin page.
+    
+    Displays a list of all users.
+    
+    Returns:
+        A rendered template of the 'admin.html' file with a list of users.
+    """
+    # Query the database for all users.
+    users = User.query.all()
+    return render_template('admin.html', users=users)
+
+def create_admin_user_view():
+    """
+    View function for creating an admin user.
+    
+    Handles the creation of a new admin user. If the request method is POST,
+    it creates an admin user if the email does not already exist.
+    
+    Returns:
+        - If GET: A rendered template of the 'create_admin_user.html' file.
+        - If POST: Redirects to the login page on successful creation, or
+          flashes an error message if the user already exists.
+    """
+    if request.method == 'POST':
+        # Retrieve email and password from the submitted form.
+        email = request.form['email']
+        password = request.form['password']
+        
+        # Check if the user already exists in the database.
+        if not User.query.filter_by(email=email).first():
+            # Hash the password and create a new admin user.
+            hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
+            admin_user = User(email=email, password=hashed_password, is_admin=True)
+            
+            # Add the new admin user to the database and commit the transaction.
+            db_temp.session.add(admin_user)
+            db_temp.session.commit()
+            
+            # Flash a success message and redirect to the login page.
+            flash('Admin user created successfully', 'success')
+            return redirect(url_for('login'))
+        else:
+            # Flash an error message if the user already exists.
+            flash('User already exists', 'error')
+    
+    # Render the create admin user page template.
+    return render_template('create_admin_user.html')
+
+def add_user_view():
+    """
+    View function for adding a new user.
+    
+    Handles the addition of a new user. If the request method is POST,
+    it creates a new user if the email does not already exist.
+    
+    Returns:
+        A redirect to the admin page, either adding the user successfully
+        or flashing an error message if the user already exists.
+    """
+    if request.method == 'POST':
+        # Retrieve email, password, and admin status from the submitted form.
+        email = request.form['email']
+        password = request.form['password']
+        is_admin = request.form.get('is_admin') == 'on'
+        
+        # Check if the user already exists in the database.
+        user = User.query.filter_by(email=email).first()
+        if user:
+            # Flash an error message if the user already exists.
+            flash('User already exists.', 'error')
+        else:
+            try:
+                # Hash the password and create a new user.
+                hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
+                new_user = User(email=email, password=hashed_password, is_admin=is_admin)
+                
+                # Add the new user to the database and commit the transaction.
+                db_temp.session.add(new_user)
+                db_temp.session.commit()
+                
+                # Flash a success message and redirect to the admin page.
+                flash('User added successfully', 'success')
+                return redirect(url_for('admin'))
+            except Exception as e:
+                # Rollback the transaction in case of an error and flash the error message.
+                db_temp.session.rollback()
+                flash(f'Error: {str(e)}', 'error')
+    
+    # Redirect to the admin page.
+    return redirect(url_for('admin'))
+
+def edit_user_view(user_id):
+    """
+    View function for editing an existing user.
+    
+    Handles user updates. If the request method is POST, it updates the user's
+    details based on the provided information.
+    
+    Args:
+        user_id (int): The ID of the user to be edited.
+        
+    Returns:
+        - If GET: A rendered template of the 'edit_user.html' file with the user data.
+        - If POST: Redirects to the admin page on successful update, or flashes
+          an error message in case of failure.
+    """
+    # Retrieve the user by ID.
+    user = User.query.get(user_id)
+    
+    if request.method == 'POST':
+        # Update user's email.
+        user.email = request.form['email']
+        
+        # Update user's password if a new password is provided.
+        if request.form['password']:
+            user.password = generate_password_hash(request.form['password'], method='pbkdf2:sha256')
+        
+        # Update user's admin status.
+        user.is_admin = request.form.get('is_admin') == 'on'
+        
+        try:
+            # Commit the updates to the database.
+            db_temp.session.commit()
+            flash('User updated successfully', 'success')
+            return redirect(url_for('admin'))
+        except Exception as e:
+            # Rollback the transaction in case of an error and flash the error message.
+            db_temp.session.rollback()
+            flash(f'Error: {str(e)}', 'error')
+    
+    # Render the edit user page template with the user data.
+    return render_template('edit_user.html', user=user)
+
+def delete_user_view(user_id):
+    """
+    View function for deleting an existing user.
+    
+    Handles user deletion. Deletes the user with the specified ID from the database.
+    
+    Args:
+        user_id (int): The ID of the user to be deleted.
+        
+    Returns:
+        A redirect to the admin page, either deleting the user successfully or
+        flashing an error message in case of failure.
+    """
+    # Retrieve the user by ID.
+    user = User.query.get(user_id)
+    
+    try:
+        # Delete the user from the database and commit the transaction.
+        db_temp.session.delete(user)
+        db_temp.session.commit()
+        flash('User deleted successfully', 'success')
+    except Exception as e:
+        # Rollback the transaction in case of an error and flash the error message.
+        db_temp.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+    
+    # Redirect to the admin page.
+    return redirect(url_for('admin'))

@@ -13,26 +13,41 @@
         }
         .container {
             max-width: 1200px;
-            margin: 20px auto; /* Reduced margin for less empty space */
+            margin: 20px auto;
             background-color: #ffffff;
-            padding: 20px; /* Reduced padding for a more compact design */
+            padding: 20px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             border-radius: 8px;
+            position: relative;
+        }
+        .logout-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background-color: #dc3545;
+            color: #ffffff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            text-decoration: none;
+            text-align: center;
         }
         h1 {
             text-align: center;
             color: #333333;
-            margin-bottom: 20px; /* Reduced margin for a more compact design */
-            font-size: 2em; /* Adjusted font size for better scalability */
+            margin-bottom: 20px;
+            font-size: 2em;
         }
         .btn-row {
             display: flex;
-            flex-wrap: wrap; /* Allow buttons to wrap on smaller screens */
+            flex-wrap: wrap;
             justify-content: space-between;
-            margin-bottom: 20px; /* Reduced margin for a more compact design */
+            margin-bottom: 20px;
         }
         .btn {
-            flex: 1 1 calc(25% - 20px); /* Responsive button width with margin consideration */
+            flex: 1 1 calc(25% - 20px);
             margin: 10px;
             padding: 15px 20px;
             font-size: 16px;
@@ -55,7 +70,7 @@
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px; /* Reduced margin for a more compact design */
+            margin-top: 20px;
             font-size: 1em;
         }
         th, td {
@@ -125,9 +140,13 @@
             margin-top: 0;
             margin-bottom: 20px;
         }
+        .error-message {
+            color: red;
+            margin-bottom: 10px;
+        }
         @media (max-width: 768px) {
             .btn {
-                flex: 1 1 100%; /* Full width buttons on smaller screens */
+                flex: 1 1 100%;
             }
             .form-row {
                 flex-direction: column;
@@ -144,6 +163,7 @@
 </head>
 <body onload="fetchEvents()">
     <div class="container">
+        <a href="/logout" class="logout-btn">Logout</a>
         <h1>Attendee Call Bot</h1>
         <div class="btn-row">
             <button class="btn btn-green" onclick="openAddEventForm()">Add New Event</button>
@@ -170,42 +190,50 @@
     <div id="addEventForm" class="modal">
         <div class="modal-content">
             <h2>Add New Event</h2>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="eventName">Event Name</label>
-                    <input type="text" id="eventName" name="eventName" required>
+            <form id="eventForm" enctype="multipart/form-data" onsubmit="return validateForm()">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="eventName">Event Name</label>
+                        <input type="text" id="eventName" name="eventName" required>
+                        <div class="error-message" id="eventNameError"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventLocation">Event Location</label>
+                        <input type="text" id="eventLocation" name="eventLocation" required>
+                        <div class="error-message" id="eventLocationError"></div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="eventLocation">Event Location</label>
-                    <input type="text" id="eventLocation" name="eventLocation" required>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="eventSummary">Event Summary</label>
+                        <textarea id="eventSummary" name="eventSummary" required></textarea>
+                        <div class="error-message" id="eventSummaryError"></div>
+                    </div>
                 </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="eventSummary">Event Summary</label>
-                    <textarea id="eventSummary" name="eventSummary" required></textarea>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="eventDate">Event Date</label>
+                        <input type="date" id="eventDate" name="eventDate" required>
+                        <div class="error-message" id="eventDateError"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventTime">Event Time</label>
+                        <input type="time" id="eventTime" name="eventTime" required>
+                        <div class="error-message" id="eventTimeError"></div>
+                    </div>
                 </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="eventDate">Event Date</label>
-                    <input type="date" id="eventDate" name="eventDate" required>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="attendeesFile">Attach Attendees File (.csv, .xlsx)</label>
+                        <input type="file" id="attendeesFile" name="attendeesFile" accept=".csv,.xlsx" required>
+                        <div class="error-message" id="attendeesFileError"></div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="eventTime">Event Time</label>
-                    <input type="time" id="eventTime" name="eventTime" required>
+                <div>
+                    <button type="button" class="btn btn-green" onclick="saveEvent()">Save Event</button>
+                    <button type="button" class="btn btn-grey" onclick="closeAddEventForm()">Cancel</button>
                 </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="attendeesFile">Attach Attendees File (.xlsm)</label>
-                    <input type="file" id="attendeesFile" name="attendeesFile" accept=".xlsm" required>
-                </div>
-            </div>
-            <div>
-                <button class="btn btn-green" onclick="saveEvent()">Save Event</button>
-                <button class="btn btn-grey" onclick="closeAddEventForm()">Cancel</button>
-            </div>
+            </form>
         </div>
     </div>
 
@@ -256,6 +284,8 @@
 
     <script>
         function openAddEventForm() {
+            document.getElementById('eventForm').reset(); // This will reset all the form fields
+            clearErrorMessages(); // Clear previous error messages
             document.getElementById('addEventForm').style.display = 'flex';
         }
 
@@ -264,6 +294,7 @@
         }
 
         function openTriggerInitialCallDialog() {
+            document.getElementById('initialEventId').value = ''; // Clear previous input
             document.getElementById('triggerInitialCallDialog').style.display = 'flex';
         }
 
@@ -272,6 +303,7 @@
         }
 
         function openTriggerReminderCallDialog() {
+            document.getElementById('reminderEventId').value = ''; // Clear previous input
             document.getElementById('triggerReminderCallDialog').style.display = 'flex';
         }
 
@@ -280,6 +312,7 @@
         }
 
         function openTriggerCallbackDialog() {
+            document.getElementById('callbackEventId').value = ''; // Clear previous input
             document.getElementById('triggerCallbackDialog').style.display = 'flex';
         }
 
@@ -287,14 +320,54 @@
             document.getElementById('triggerCallbackDialog').style.display = 'none';
         }
 
+        function clearErrorMessages() {
+            document.getElementById('eventNameError').textContent = '';
+            document.getElementById('eventLocationError').textContent = '';
+            document.getElementById('eventSummaryError').textContent = '';
+            document.getElementById('eventDateError').textContent = '';
+            document.getElementById('eventTimeError').textContent = '';
+            document.getElementById('attendeesFileError').textContent = '';
+        }
+
+        function validateForm() {
+            clearErrorMessages();
+            let isValid = true;
+
+            if (document.getElementById('eventName').value.trim() === '') {
+                document.getElementById('eventNameError').textContent = 'Event name is a mandatory field.';
+                isValid = false;
+            }
+            if (document.getElementById('eventLocation').value.trim() === '') {
+                document.getElementById('eventLocationError').textContent = 'Event location is a mandatory field.';
+                isValid = false;
+            }
+            if (document.getElementById('eventSummary').value.trim() === '') {
+                document.getElementById('eventSummaryError').textContent = 'Event summary is a mandatory field.';
+                isValid = false;
+            }
+            if (document.getElementById('eventDate').value.trim() === '') {
+                document.getElementById('eventDateError').textContent = 'Event date is a mandatory field.';
+                isValid = false;
+            }
+            if (document.getElementById('eventTime').value.trim() === '') {
+                document.getElementById('eventTimeError').textContent = 'Event time is a mandatory field.';
+                isValid = false;
+            }
+            if (document.getElementById('attendeesFile').files.length === 0) {
+                document.getElementById('attendeesFileError').textContent = 'Attendees file is a mandatory field.';
+                isValid = false;
+            }
+
+            return isValid;
+        }
+
         function saveEvent() {
-            const formData = new FormData();
-            formData.append('eventName', document.getElementById('eventName').value);
-            formData.append('eventLocation', document.getElementById('eventLocation').value);
-            formData.append('eventSummary', document.getElementById('eventSummary').value);
-            formData.append('eventDate', document.getElementById('eventDate').value);
-            formData.append('eventTime', document.getElementById('eventTime').value);
-            formData.append('attendeesFile', document.getElementById('attendeesFile').files[0]);
+            if (!validateForm()) {
+                return;
+            }
+
+            const form = document.getElementById('eventForm');
+            const formData = new FormData(form);
 
             fetch('/save_event', {
                 method: 'POST',
@@ -306,8 +379,11 @@
                     alert('Event saved successfully with Event ID: ' + data.event_id);
                     fetchEvents(); // Refresh the event list
                 } else {
-                    alert(data.message);
+                    alert('Error: ' + data.message);
                 }
+            }).catch(error => {
+                alert('An error occurred while saving the event. Please try again.');
+                console.error('Error:', error);
             });
         }
 
@@ -318,14 +394,21 @@
             fetch('/trigger_initial_call', {
                 method: 'POST',
                 body: formData
-            }).then(response => response.json())
-            .then(data => {
+            }).then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            }).then(data => {
                 if (data.status === 'success') {
                     closeTriggerInitialCallDialog();
-                    alert('Initial call triggered successfully');
+                    alert('Initial call triggered successfully.');
                 } else {
-                    alert('Failed to trigger initial call');
+                    alert('Error: ' + data.message);
                 }
+            }).catch(error => {
+                alert('An error occurred while triggering the initial call. Please try again.');
+                console.error('Error:', error);
             });
         }
 
@@ -336,14 +419,21 @@
             fetch('/trigger_reminder_call', {
                 method: 'POST',
                 body: formData
-            }).then(response => response.json())
-            .then(data => {
+            }).then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            }).then(data => {
                 if (data.status === 'success') {
                     closeTriggerReminderCallDialog();
-                    alert('Reminder call triggered successfully');
+                    alert('Reminder call triggered successfully.');
                 } else {
-                    alert('Failed to trigger reminder call');
+                    alert('Error: ' + data.message);
                 }
+            }).catch(error => {
+                alert('An error occurred while triggering the reminder call. Please try again.');
+                console.error('Error:', error);
             });
         }
 
@@ -354,14 +444,21 @@
             fetch('/trigger_callbacks', {
                 method: 'POST',
                 body: formData
-            }).then(response => response.json())
-            .then(data => {
+            }).then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            }).then(data => {
                 if (data.status === 'success') {
                     closeTriggerCallbackDialog();
-                    alert('Callbacks triggered successfully');
+                    alert('Callbacks triggered successfully.');
                 } else {
-                    alert('Failed to trigger callbacks');
+                    alert('Error: ' + data.message);
                 }
+            }).catch(error => {
+                alert('An error occurred while triggering the callbacks. Please try again.');
+                console.error('Error:', error);
             });
         }
 
@@ -383,6 +480,7 @@
                     });
                 })
                 .catch(error => {
+                    alert('An error occurred while fetching events. Please try again.');
                     console.error('Error fetching event data:', error);
                 });
         }

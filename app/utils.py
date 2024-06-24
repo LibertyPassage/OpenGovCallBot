@@ -39,13 +39,42 @@ AZURE_CONTAINER_NAME = 'your_container_name'
 
 
 def login_required(f):
+    """
+    Decorator to ensure that a user is logged in before accessing a route.
+    
+    Args:
+        f (function): The view function that requires login.
+        
+    Returns:
+        function: A decorated function that checks for user login status.
+    """
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        """
+        Wrapper function that checks if the user is logged in.
+        
+        If the 'email' key is not in the session (i.e., the user is not logged in),
+        it redirects the user to the login page. Otherwise, it proceeds with the 
+        execution of the wrapped view function.
+        
+        Args:
+            *args: Positional arguments passed to the view function.
+            **kwargs: Keyword arguments passed to the view function.
+        
+        Returns:
+            function: The result of the original view function if the user is logged in,
+                      otherwise a redirect to the login page.
+        """
+        # Check if the user is logged in by verifying the presence of 'email' in the session.
         if 'email' not in session:
+            # If the user is not logged in, redirect to the login page.
             return redirect(url_for('login'))
+        
+        # If the user is logged in, proceed with the execution of the original view function.
         return f(*args, **kwargs)
+    
+    # Return the wrapper function, effectively applying the decorator.
     return decorated_function
-
 
 # blob / csv file name
 def get_current_csv_blob_name():

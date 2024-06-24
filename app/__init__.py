@@ -19,14 +19,12 @@ Database Initialization: Sets up the database connection.
 from flask import Flask
 import logging
 from flask_sqlalchemy import SQLAlchemy
-
-
-#from app.db_connect import get_db_connection
-
-from .config import account_sid, auth_token, connect_str, container_name,config
+from .config import app_secretkey, init_AppConfig
 
 app = Flask(__name__)
 # Configuration
+app.secret_key = app_secretkey
+app.config['SQLALCHEMY_DATABASE_URI'] = init_AppConfig
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # Initialize the database
 db = SQLAlchemy(app)
@@ -36,6 +34,3 @@ with app.app_context():
     db.create_all()
 
 logging.basicConfig(level=logging.DEBUG)
-
-
-#from . import routes  # Import routes here to avoid circular imports

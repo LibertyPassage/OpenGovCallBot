@@ -676,104 +676,260 @@ def reminder_view():
     
 #Login,signup and logout logic
 def home_view():
+    """
+    View function for the home page.
+    
+    Renders the main user interface of the application.
+    
+    Returns:
+        A rendered template of the 'callbotUI_V6.html' file.
+    """
     return render_template('callbotUI_V6.html')
 
 def login_view():
+    """
+    View function for the login page.
+    
+    Handles user authentication. If the request method is POST, it checks the
+    user's credentials and logs them in if valid.
+    
+    Returns:
+        - If GET: A rendered template of the 'login.html' file.
+        - If POST: Redirects to the index page on successful login, or
+          flashes an error message on failure.
+    """
     if request.method == 'POST':
+        # Retrieve email and password from the submitted form.
         email = request.form['email']
         password = request.form['password']
+        
+        # Query the database for the user by email.
         user = User.query.filter_by(email=email).first()
+        
+        # Verify the password and check if the user exists.
         if user and check_password_hash(user.password, password):
+            # Store user information in the session.
             session['email'] = email
             session['is_admin'] = user.is_admin
             return redirect(url_for('index'))
         else:
+            # Flash an error message for invalid credentials.
             flash('Invalid credentials. Please try again.', 'error')
+    
+    # Render the login page template.
     return render_template('login.html')
 
 def signup_view():
+    """
+    View function for the signup page.
+    
+    Handles user registration. If the request method is POST, it creates a 
+    new user if the email does not already exist.
+    
+    Returns:
+        - If GET: A rendered template of the 'signup.html' file.
+        - If POST: Redirects to the index page on successful registration, or
+          flashes an error message if the user already exists.
+    """
     if request.method == 'POST':
+        # Retrieve email and password from the submitted form.
         email = request.form['email']
         password = request.form['password']
+        
+        # Check if the user already exists in the database.
         user = User.query.filter_by(email=email).first()
         if user:
+            # Flash an error message if the user already exists.
             flash('User already exists. Please log in.', 'error')
         else:
+            # Hash the password and create a new user.
             hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
             new_user = User(email=email, password=hashed_password)
+            
+            # Add the new user to the database and commit the transaction.
             db_temp.session.add(new_user)
             db_temp.session.commit()
+            
+            # Store user information in the session.
             session['email'] = email
             return redirect(url_for('index'))
+    
+    # Render the signup page template.
     return render_template('signup.html')
 
 def logout_view():
+    """
+    View function for logging out.
+    
+    Removes user information from the session.
+    
+    Returns:
+        A redirect to the login page.
+    """
+    # Remove 'email' from the session to log out the user.
     session.pop('email', None)
     return redirect(url_for('login'))
 
 def admin_view():
+    """
+    View function for the admin page.
+    
+    Displays a list of all users.
+    
+    Returns:
+        A rendered template of the 'admin.html' file with a list of users.
+    """
+    # Query the database for all users.
     users = User.query.all()
     return render_template('admin.html', users=users)
 
 def create_admin_user_view():
+    """
+    View function for creating an admin user.
+    
+    Handles the creation of a new admin user. If the request method is POST,
+    it creates an admin user if the email does not already exist.
+    
+    Returns:
+        - If GET: A rendered template of the 'create_admin_user.html' file.
+        - If POST: Redirects to the login page on successful creation, or
+          flashes an error message if the user already exists.
+    """
     if request.method == 'POST':
+        # Retrieve email and password from the submitted form.
         email = request.form['email']
         password = request.form['password']
+        
+        # Check if the user already exists in the database.
         if not User.query.filter_by(email=email).first():
+            # Hash the password and create a new admin user.
             hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
             admin_user = User(email=email, password=hashed_password, is_admin=True)
+            
+            # Add the new admin user to the database and commit the transaction.
             db_temp.session.add(admin_user)
             db_temp.session.commit()
+            
+            # Flash a success message and redirect to the login page.
             flash('Admin user created successfully', 'success')
             return redirect(url_for('login'))
         else:
+            # Flash an error message if the user already exists.
             flash('User already exists', 'error')
+    
+    # Render the create admin user page template.
     return render_template('create_admin_user.html')
 
 def add_user_view():
+    """
+    View function for adding a new user.
+    
+    Handles the addition of a new user. If the request method is POST,
+    it creates a new user if the email does not already exist.
+    
+    Returns:
+        A redirect to the admin page, either adding the user successfully
+        or flashing an error message if the user already exists.
+    """
     if request.method == 'POST':
+        # Retrieve email, password, and admin status from the submitted form.
         email = request.form['email']
         password = request.form['password']
         is_admin = request.form.get('is_admin') == 'on'
+        
+        # Check if the user already exists in the database.
         user = User.query.filter_by(email=email).first()
         if user:
+            # Flash an error message if the user already exists.
             flash('User already exists.', 'error')
         else:
             try:
+                # Hash the password and create a new user.
                 hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
                 new_user = User(email=email, password=hashed_password, is_admin=is_admin)
+                
+                # Add the new user to the database and commit the transaction.
                 db_temp.session.add(new_user)
                 db_temp.session.commit()
+                
+                # Flash a success message and redirect to the admin page.
                 flash('User added successfully', 'success')
                 return redirect(url_for('admin'))
             except Exception as e:
+                # Rollback the transaction in case of an error and flash the error message.
                 db_temp.session.rollback()
                 flash(f'Error: {str(e)}', 'error')
+    
+    # Redirect to the admin page.
     return redirect(url_for('admin'))
 
 def edit_user_view(user_id):
+    """
+    View function for editing an existing user.
+    
+    Handles user updates. If the request method is POST, it updates the user's
+    details based on the provided information.
+    
+    Args:
+        user_id (int): The ID of the user to be edited.
+        
+    Returns:
+        - If GET: A rendered template of the 'edit_user.html' file with the user data.
+        - If POST: Redirects to the admin page on successful update, or flashes
+          an error message in case of failure.
+    """
+    # Retrieve the user by ID.
     user = User.query.get(user_id)
+    
     if request.method == 'POST':
+        # Update user's email.
         user.email = request.form['email']
+        
+        # Update user's password if a new password is provided.
         if request.form['password']:
             user.password = generate_password_hash(request.form['password'], method='pbkdf2:sha256')
+        
+        # Update user's admin status.
         user.is_admin = request.form.get('is_admin') == 'on'
+        
         try:
+            # Commit the updates to the database.
             db_temp.session.commit()
             flash('User updated successfully', 'success')
             return redirect(url_for('admin'))
         except Exception as e:
+            # Rollback the transaction in case of an error and flash the error message.
             db_temp.session.rollback()
             flash(f'Error: {str(e)}', 'error')
+    
+    # Render the edit user page template with the user data.
     return render_template('edit_user.html', user=user)
 
 def delete_user_view(user_id):
+    """
+    View function for deleting an existing user.
+    
+    Handles user deletion. Deletes the user with the specified ID from the database.
+    
+    Args:
+        user_id (int): The ID of the user to be deleted.
+        
+    Returns:
+        A redirect to the admin page, either deleting the user successfully or
+        flashing an error message in case of failure.
+    """
+    # Retrieve the user by ID.
     user = User.query.get(user_id)
+    
     try:
+        # Delete the user from the database and commit the transaction.
         db_temp.session.delete(user)
         db_temp.session.commit()
         flash('User deleted successfully', 'success')
     except Exception as e:
+        # Rollback the transaction in case of an error and flash the error message.
         db_temp.session.rollback()
         flash(f'Error: {str(e)}', 'error')
+    
+    # Redirect to the admin page.
     return redirect(url_for('admin'))

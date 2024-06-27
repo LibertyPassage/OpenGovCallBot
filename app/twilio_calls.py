@@ -82,6 +82,8 @@ def make_call(attendee_phonenumber, attendee_name, event_name, event_summary, ev
             url = base_url + 'voice'
         elif call_type == 'reminder':
             url = base_url + 'reminder'
+        elif call_type == 'callback':
+            url = base_url + 'voice_callback'
         else:
             return "Invalid call type."
 
@@ -120,9 +122,6 @@ def make_call(attendee_phonenumber, attendee_name, event_name, event_summary, ev
         write_csv_header(csv_blob_name)
         data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,,{attendee_name},{event_date},{event_name},{event_summary},{eventTime},{event_venue},{call_type}\n"
         append_to_blob(csv_blob_name, data)
-
-        # Run the blob update script (if needed)
-        # subprocess.run(['python', 'blob_update.py'])
 
         return f"Call initiated. Call SID: {call.sid}"
 

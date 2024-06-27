@@ -16,7 +16,7 @@ Route Handling: Processes GET, POST, and other HTTP methods.
 
 """
 from app import app
-from app.views import home_view, login_view, signup_view, logout_view, admin_view, reminder_view, index_view, get_events_view, save_event_view, trigger_initial_call_view, trigger_reminder_call_view, voice_view, gather_view, gather2_view, gather3_view, status_view,create_admin_user_view,add_user_view, edit_user_view, delete_user_view
+from app.views import home_view, login_view, signup_view, logout_view, admin_view, reminder_view, index_view, get_events_view, save_event_view, trigger_initial_call_view, trigger_reminder_call_view, voice_view, gather_view, gather2_view, gather3_view, status_view,create_admin_user_view,add_user_view, edit_user_view, delete_user_view,trigger_callback_view,voice_callback_view
 from app.utils import login_required
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -56,10 +56,22 @@ def save_event():
 def trigger_initial_call():
     return trigger_initial_call_view()
 
+
+@app.route('/trigger_callbacks', methods=['POST'])
+# @login_required
+def trigger_callback():
+    return trigger_callback_view()
+
+
 @app.route('/trigger_reminder_call', methods=['POST'])
 # @login_required
 def trigger_reminder_call():
     return trigger_reminder_call_view()
+
+@app.route("/voice_callback", methods=['GET', 'POST'])
+# @login_required
+def voice_callback():
+    return voice_callback_view()
 
 @app.route("/voice", methods=['GET', 'POST'])
 # @login_required
@@ -90,8 +102,6 @@ def status():
 # @login_required
 def reminder():
     return reminder_view()
-
-
 
 @app.route('/create_admin_user', methods=['GET', 'POST'])
 def create_admin_user():

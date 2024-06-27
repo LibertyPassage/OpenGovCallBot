@@ -30,7 +30,7 @@ from .utils import get_current_csv_blob_name, log_response
 from .blob_operations import write_csv_header, append_to_blob
 from twilio.twiml.voice_response import VoiceResponse, Gather
 from datetime import datetime
-from .config import twilio_number, voice_change, registration_table
+from .config import twilio_number, voice_change, registration_table, table1
 from .db_update import main
 from werkzeug.security import generate_password_hash, check_password_hash
 from app.models import User,db_temp
@@ -371,7 +371,7 @@ def voice_view():
         resp = VoiceResponse()
         gather = Gather(action='/gather', num_digits=1)
         gather.say(
-            f"Hello {first_name}, This is the Open GOV Bot calling on behalf of the organizing committee for an event. We are delighted to invite you to our upcoming event, {event_name}! Taking place on {event_date} at {eventTime} Malaysia Standard Time. This event promises to be an insightful experience held at {event_venue}. Here�s a brief overview: {event_summary}. We believe your presence will add immense value, and we would be honored to have you with us. To confirm your attendance, please press 1. If you need a callback for more details, press 2.",
+            f"Hello {first_name}, This is the Open GOV AI calling on behalf of the organizing committee for an event. We are delighted to invite you to our upcoming event, {event_name}! Taking place on {event_date} at {eventTime} Malaysia Standard Time. This event promises to be an insightful experience held at {event_venue}. Here’s a brief overview: {event_summary}. We believe your presence will add immense value, and we would be honored to have you with us. To confirm your attendance, please press 1. If you need a callback for more details, press 2.",
             voice=voice_change
         )
 
@@ -411,11 +411,12 @@ def gather_view():
         resp = VoiceResponse()
         call_sid = request.values.get('CallSid')
         guid = call_guid_map.get(call_sid)
+        attempt_count = int(request.args.get('attempt_count', 0))
 
         if digit == '1':
             gather = Gather(action='/gather2', num_digits=1)
             gather.say(
-                "Thank you for accepting the invitation. Would you like to utilize our pickup and drop-off service for this event? If yes, press 1. If no, press 2.",
+                "Thank you for accepting the invitation. We provide a pickup and drop-off service as well as parking coupons for event attendees. Please press 1 to select the pickup and drop-off service, or press 2 to obtain a parking coupon.",
                 voice=voice_change
             )
             resp.append(gather)
@@ -439,17 +440,23 @@ def gather_view():
 
             log_response('Request Callback')
         else:
-            resp.say("You did not press a valid option.", voice=voice_change)
-
-            csv_blob_name = get_current_csv_blob_name()
-            write_csv_header(csv_blob_name)
-            data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Invalid option,,{event_date},{event_name},{event_summary},{event_time},{event_venue},\n"
-            append_to_blob(csv_blob_name, data)
+            if attempt_count < 1:
+                gather = Gather(action=f'/gather?attempt_count={attempt_count + 1}', num_digits=1)
+                gather.say("You did not press a valid option. Please press 1 to accept the invitation, or press 2 to request a callback.", voice=voice_change)
+                resp.append(gather)
+            else:
+                resp.say("You did not press a valid option. Goodbye.", voice=voice_change)
+                
+                csv_blob_name = get_current_csv_blob_name()
+                write_csv_header(csv_blob_name)
+                data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Invalid option attempt {attempt_count + 1},,{event_date},{event_name},{event_summary},{event_time},{event_venue},\n"
+                append_to_blob(csv_blob_name, data)
 
         return str(resp)
     except Exception as e:
         logging.error(f"Error in /gather: {e}")
         return str(VoiceResponse().say("An application error occurred.", voice=voice_change))
+
 
 
 def gather2_view():
@@ -477,6 +484,7 @@ def gather2_view():
         resp = VoiceResponse()
         call_sid = request.values.get('CallSid')
         guid = call_guid_map.get(call_sid)
+        attempt_count = int(request.args.get('attempt_count', 0))
 
         if digit == '1':
             gather = Gather(action='/gather3', num_digits=1)
@@ -494,23 +502,28 @@ def gather2_view():
             log_response('Pickup and Drop Accepted')
         elif digit == '2':
             resp.say(
-                "You have declined the pickup and drop-off service. Thank you & Good day.",
+                "You have selected a parking coupon. It will be arranged for you. Thank you, and Good day!",
                 voice=voice_change
             )
 
             csv_blob_name = get_current_csv_blob_name()
             write_csv_header(csv_blob_name)
-            data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Pickup and Drop Declined,,{event_date},{event_name},{event_summary},{event_time},{event_venue},\n"
+            data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,parking coupon,,{event_date},{event_name},{event_summary},{event_time},{event_venue},\n"
             append_to_blob(csv_blob_name, data)
 
-            log_response('Pickup and Drop Declined')
+            log_response('parking coupon')
         else:
-            resp.say("You did not press a valid option.", voice=voice_change)
-
-            csv_blob_name = get_current_csv_blob_name()
-            write_csv_header(csv_blob_name)
-            data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Invalid option,,{event_date},{event_name},{event_summary},{event_time},{event_venue},\n"
-            append_to_blob(csv_blob_name, data)
+            if attempt_count < 1:
+                gather = Gather(action=f'/gather2?attempt_count={attempt_count + 1}', num_digits=1)
+                gather.say("You did not press a valid option. Please press 1 for pickup and drop off, or press 2 for parking coupon.", voice=voice_change)
+                resp.append(gather)
+            else:
+                resp.say("You did not press a valid option. Goodbye.", voice=voice_change)
+                
+                csv_blob_name = get_current_csv_blob_name()
+                write_csv_header(csv_blob_name)
+                data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Invalid option,,{event_date},{event_name},{event_summary},{event_time},{event_venue},\n"
+                append_to_blob(csv_blob_name, data)
 
         return str(resp)
     except Exception as e:
@@ -536,7 +549,7 @@ def gather3_view():
     event_time = request.args.get('eventTime', 'eventTime')
     attendee_phonenumber = request.args.get('attendee_phonenumber', 'attendee_phonenumber')
     first_name = attendee_name.split()[0]
-
+    attempt_count = int(request.args.get('attempt_count', 0))
     try:
         digit = request.values.get('Digits')
         resp = VoiceResponse()
@@ -568,12 +581,17 @@ def gather3_view():
 
             log_response('Home Address')
         else:
-            resp.say("You did not press a valid option.", voice=voice_change)
+            if attempt_count < 1:
+                gather = Gather(action=f'/gather3?attempt_count={attempt_count + 1}', num_digits=1)
+                gather.say("You did not press a valid option. Please press 1 for office address, press 2 For home address.", voice=voice_change)
+                resp.append(gather)
+            else:
+                resp.say("You did not press a valid option. Goodbye.", voice=voice_change)
 
-            csv_blob_name = get_current_csv_blob_name()
-            write_csv_header(csv_blob_name)
-            data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Invalid option,,{event_date},{event_name},{event_summary},{event_time},{event_venue},\n"
-            append_to_blob(csv_blob_name, data)
+                csv_blob_name = get_current_csv_blob_name()
+                write_csv_header(csv_blob_name)
+                data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Invalid option,,{event_date},{event_name},{event_summary},{event_time},{event_venue},\n"
+                append_to_blob(csv_blob_name, data)
 
         return str(resp)
     except Exception as e:
@@ -658,7 +676,7 @@ def reminder_view():
             # Create a Twilio VoiceResponse for the reminder
             resp = VoiceResponse()
             resp.say(
-                f"Hello {first_name}, as a valued registered participant, this is a reminder from the OpenGov call bot regarding the upcoming event, {event_name}. scheduled date {event_date} at {event_time} Malaysia Standard Time. To be held at {event_venue}. Thank you.",
+                f"Hello {first_name}, as a valued registered participant, this is a reminder from the OpenGov AI call bot regarding the upcoming event, {event_name}. scheduled date {event_date} at {event_time} Malaysia Standard Time. To be held at {event_venue}. I want to remind you that Failure to attend for the entire duration (without replacement) will result in a US$495 non-attendance fee. This fee covers the costs incurred for the delegate materials, food, and the opportunity cost of allocating the pass to someone else. Thank you for your time. We look forward to seeing you at {event_name}. Have a wonderful day!",
                 voice=voice_change
             )
     
@@ -679,7 +697,102 @@ def reminder_view():
             # Log any exceptions that occur and return a voice response indicating an error
             logging.error(f"Error in /reminder: {e}")
             return str(VoiceResponse().say("An application error occurred.", voice=voice_change))
-    
+
+def trigger_callback_view():
+    try:
+        event_id = request.form['event_id']
+        conn = get_db_connection()
+        if conn:
+            cursor = conn.cursor()
+            
+            # Retrieve event details from the database
+            cursor.execute(f"SELECT * FROM {table1} WHERE Event_ID = %s", (event_id,))
+            event = cursor.fetchall()
+            column_names = [desc[0] for desc in cursor.description]  # Get column names from cursor description
+            
+            cursor.close()
+            conn.close()
+
+            if event:
+                df = pd.DataFrame(event, columns=column_names)
+                df_cleaned = df.drop_duplicates(subset=['Recipient_Number'])
+                df_cleaned['Event_Time'] = df_cleaned['Event_Time'].astype(str).apply(lambda x: x.split(" ")[-1])
+
+                # Loop over each attendee and make the call
+                for idx, row in df_cleaned.iterrows():
+                    make_call(
+                        attendee_phonenumber=row["Recipient_Number"],
+                        attendee_name=row["Attendee_Name"],
+                        event_name=row["Event_Name"],
+                        event_summary=row["Event_Summary"],
+                        event_date=row["Event_Date"],
+                        event_venue=row["Event_Venue"],
+                        call_type='callback',
+                        event_id=row["Event_ID"],
+                        eventTime=row["Event_Time"]
+                    )
+                    print('deleting the GUID',row["GUID"])
+                    # Remove the record from callback table since call back request trigger is completed
+                    # cursor.execute(f"DELETE FROM `callbot_response_callback` WHERE GUID = 'b9e8c404-9251-4073-9b94-8e9a00cd2da8'")
+
+                cursor.close()
+                conn.close()
+
+                return jsonify(status='success', message='Initial call triggered successfully')
+            else:
+                cursor.close()
+                conn.close()
+                return jsonify(status='error', message='Event not found')
+        else:
+            return jsonify(status='error', message='Could not establish a connection to the database')
+    except Exception as e:
+        logging.error(f'Error occurred: {str(e)}')
+        return jsonify(status='error', message='An error occurred while triggering the initial call. Please try again.')
+
+
+def voice_callback_view():
+    """
+    Handles the Twilio voice response for initial event invitations.
+
+    This function processes the request from Twilio, gathers necessary event and attendee 
+    information from query parameters, and initiates a Twilio voice response that provides 
+    details about the event and prompts the attendee to accept the invitation or request a callback.
+
+    Returns:
+        str: The Twilio VoiceResponse object as a string.
+    """
+    try:
+        attendee_name = request.args.get('name', 'Attendee')
+        event_name = request.args.get('event', 'Event')
+        event_summary = request.args.get('summary', 'Summary')
+        event_date = request.args.get('date', 'the scheduled date')
+        event_venue = request.args.get('venue', 'the designated venue')
+        event_id = request.args.get('eventId', 'eventId')
+        eventTime = request.args.get('eventTime', 'eventTime')
+        attendee_phonenumber = request.args.get('attendee_phonenumber', 'attendee_phonenumber')
+        first_name = attendee_name.split()[0]
+        call_sid = request.values.get('CallSid')
+        guid = call_guid_map.get(call_sid)
+        resp = VoiceResponse()
+        gather = Gather(action='/gather', num_digits=1)
+        gather.say(
+            f"Hello {first_name}, This is the Open GOV AI calling on behalf of the organizing committee for an event. Since you have requested call back. we are delighted to invite you to our upcoming event, {event_name}! Taking place on {event_date} at {eventTime} Malaysia Standard Time. This event promises to be an insightful experience held at {event_venue}. Here’s a brief overview: {event_summary}. We believe your presence will add immense value, and we would be honored to have you with us. To confirm your attendance, please press 1. If you need a callback for more details, press 2.",
+            voice=voice_change
+        )
+
+        csv_blob_name = get_current_csv_blob_name()
+        write_csv_header(csv_blob_name)
+        data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,InVoice,,{event_date},{event_name},{event_summary},{eventTime},{event_venue},\n"
+        append_to_blob(csv_blob_name, data)
+
+        resp.append(gather)
+        return str(resp)
+    except Exception as e:
+        logging.error(f"Error in /voice: {e}")
+        return str(VoiceResponse().say("An application error occurred.", voice=voice_change))
+
+
+
 #Login,signup and logout logic
 def home_view():
     """

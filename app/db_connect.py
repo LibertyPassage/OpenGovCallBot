@@ -51,11 +51,12 @@ def get_db_connection():
 def create_table_if_not_exists():
     """
     Creates the `callbot_event_registration` table in the MySQL database if it does not already exist.
+    Alters the table to add the `eventIndustry` column if it does not already exist.
 
     The table includes columns for event details such as event ID, name, location, summary, date, time,
-    attendees, and the insertion timestamp.
+    attendees, industry, and the insertion timestamp.
 
-    This function establishes a connection to the MySQL database and creates the table using SQL `CREATE TABLE IF NOT EXISTS`.
+    This function establishes a connection to the MySQL database and creates/alters the table using SQL.
     If the connection cannot be established, an error message is printed.
 
     Raises:
@@ -72,11 +73,20 @@ def create_table_if_not_exists():
                 eventSummary TEXT NOT NULL,
                 eventDate VARCHAR(50) NOT NULL,
                 eventTime VARCHAR(50) NOT NULL,
+                eventIndustry VARCHAR(500) NOT NULL,
                 attendees TEXT NOT NULL,
                 insert_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         conn.commit()
+
+        # Check if the column 'eventIndustry' exists
+        cursor.execute(f"SHOW COLUMNS FROM {registration_table} LIKE 'eventIndustry'")
+        result = cursor.fetchone()
+        if not result:
+            cursor.execute(f"ALTER TABLE {registration_table} ADD COLUMN eventIndustry VARCHAR(500) NOT NULL")
+            conn.commit()
+
         cursor.close()
         conn.close()
     else:

@@ -72,14 +72,31 @@
             border-collapse: collapse;
             margin-top: 20px;
             font-size: 1em;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
-        th, td {
+        th {
+            background-color: #007bff;
+            color: #ffffff;
+            padding: 15px;
+            text-align: left;
+            font-weight: bold;
+        }
+        td {
             border: 1px solid #dddddd;
             padding: 15px;
             text-align: left;
         }
-        th {
-            background-color: #f4f6f8;
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+        th:nth-child(2), td:nth-child(2) {
+            width: 40%; /* Make Event Name column wider */
+        }
+        th:not(:nth-child(2)), td:not(:nth-child(2)) {
+            width: 20%; /* Standard width for other columns */
         }
         .form-row {
             display: flex;
@@ -198,12 +215,17 @@
                         <div class="error-message" id="eventNameError"></div>
                     </div>
                     <div class="form-group">
+                        <label for="eventIndustry">Event Industry Name</label>
+                        <input type="text" id="eventIndustry" name="eventIndustry" required>
+                        <div class="error-message" id="eventIndustryError"></div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
                         <label for="eventLocation">Event Location</label>
                         <input type="text" id="eventLocation" name="eventLocation" required>
                         <div class="error-message" id="eventLocationError"></div>
                     </div>
-                </div>
-                <div class="form-row">
                     <div class="form-group">
                         <label for="eventSummary">Event Summary</label>
                         <textarea id="eventSummary" name="eventSummary" required></textarea>
@@ -284,8 +306,8 @@
 
     <script>
         function openAddEventForm() {
-            document.getElementById('eventForm').reset(); // This will reset all the form fields
-            clearErrorMessages(); // Clear previous error messages
+            document.getElementById('eventForm').reset();
+            clearErrorMessages();
             document.getElementById('addEventForm').style.display = 'flex';
         }
 
@@ -294,7 +316,7 @@
         }
 
         function openTriggerInitialCallDialog() {
-            document.getElementById('initialEventId').value = ''; // Clear previous input
+            document.getElementById('initialEventId').value = '';
             document.getElementById('triggerInitialCallDialog').style.display = 'flex';
         }
 
@@ -303,7 +325,7 @@
         }
 
         function openTriggerReminderCallDialog() {
-            document.getElementById('reminderEventId').value = ''; // Clear previous input
+            document.getElementById('reminderEventId').value = '';
             document.getElementById('triggerReminderCallDialog').style.display = 'flex';
         }
 
@@ -312,7 +334,7 @@
         }
 
         function openTriggerCallbackDialog() {
-            document.getElementById('callbackEventId').value = ''; // Clear previous input
+            document.getElementById('callbackEventId').value = '';
             document.getElementById('triggerCallbackDialog').style.display = 'flex';
         }
 
@@ -327,6 +349,7 @@
             document.getElementById('eventDateError').textContent = '';
             document.getElementById('eventTimeError').textContent = '';
             document.getElementById('attendeesFileError').textContent = '';
+            document.getElementById('eventIndustryError').textContent = '';
         }
 
         function validateForm() {
@@ -357,6 +380,10 @@
                 document.getElementById('attendeesFileError').textContent = 'Attendees file is a mandatory field.';
                 isValid = false;
             }
+            if (document.getElementById('eventIndustry').value.trim() === '') {
+                document.getElementById('eventIndustryError').textContent = 'Event industry name is a mandatory field.';
+                isValid = false;
+            }
 
             return isValid;
         }
@@ -377,7 +404,7 @@
                 if (data.status === 'success') {
                     closeAddEventForm();
                     alert('Event saved successfully with Event ID: ' + data.event_id);
-                    fetchEvents(); // Refresh the event list
+                    fetchEvents();
                 } else {
                     alert('Error: ' + data.message);
                 }
@@ -467,8 +494,12 @@
                 .then(response => response.json())
                 .then(data => {
                     const eventTableBody = document.getElementById('eventTableBody');
-                    eventTableBody.innerHTML = ''; // Clear existing rows
-                    data.events.forEach(event => {
+                    eventTableBody.innerHTML = '';
+                    
+                    const sortedEvents = data.events.sort((a, b) => b.eventID - a.eventID);
+                    const recentEvents = sortedEvents.slice(0, 20); // Limit to 20 most recent events
+                    
+                    recentEvents.forEach(event => {
                         const row = document.createElement('tr');
                         row.innerHTML = `
                             <td>${event.eventID}</td>
@@ -485,7 +516,6 @@
                 });
         }
 
-        // Set minimum date for eventDate input to today's date
         document.addEventListener('DOMContentLoaded', (event) => {
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('eventDate').setAttribute('min', today);

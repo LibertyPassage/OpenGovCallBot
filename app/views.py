@@ -119,6 +119,7 @@ def save_event_view():
         event_summary = request.form.get('eventSummary')
         event_date = request.form.get('eventDate')
         event_time = request.form.get('eventTime')
+        event_industry = request.form.get('eventIndustry')
         attendees_file = request.files.get('attendeesFile')
 
         # Replace commas with periods in event_summary
@@ -131,11 +132,16 @@ def save_event_view():
         if event_name:
             event_name = event_name.replace("'", '')
 
-        # Restrict commas in event_name and event_location
+        if event_industry:
+            event_industry = event_industry.replace("'", '')
+
+        # Restrict commas in event_name, event_location, and event_industry
         if ',' in event_name:
             return jsonify(status='error', message='Event Name must not contain commas.')
         if ',' in event_location:
             return jsonify(status='error', message='Event Location must not contain commas.')
+        if ',' in event_industry:
+            return jsonify(status='error', message='Event Industry Name must not contain commas.')
 
         # Input validation
         if not event_name:
@@ -148,6 +154,8 @@ def save_event_view():
             return jsonify(status='error', message='Event date is a mandatory field.')
         if not event_time:
             return jsonify(status='error', message='Event time is a mandatory field.')
+        if not event_industry:
+            return jsonify(status='error', message='Event industry name is a mandatory field.')
         if not attendees_file:
             return jsonify(status='error', message='Attendees file is a mandatory field.')
 
@@ -160,11 +168,11 @@ def save_event_view():
         cursor = conn.cursor()
 
         # Check for duplicate event name
-        cursor.execute("SELECT COUNT(*) FROM callbot_event_registration WHERE eventName = %s", (event_name,))
-        if cursor.fetchone()[0] > 0:
-            cursor.close()
-            conn.close()
-            return jsonify(status='error', message='Event Name already exists.')
+        # cursor.execute("SELECT COUNT(*) FROM callbot_event_registration WHERE eventName = %s", (event_name,))
+        # if cursor.fetchone()[0] > 0:
+        #     cursor.close()
+        #     conn.close()
+        #     return jsonify(status='error', message='Event Name already exists.')
 
         attendees = []
         if attendees_file:
@@ -179,12 +187,11 @@ def save_event_view():
 
             attendees = df.to_dict('records')
 
-        attendees_data = ';'.join([f"{attendee['attendeeName']}:{attendee['attendeePhone']}" for attendee in attendees])
-        # logging.info(f'Attendees data: {attendees_data}')
+        attendees_data = ';'.join([f"{attendee['attendeeName']}:{attendee['attendeePhone']}:{attendee.get('attendeeEmailId', '')}" for attendee in attendees])
 
         cursor.execute(
-            "INSERT INTO callbot_event_registration (eventName, eventLocation, eventSummary, eventDate, eventTime, attendees) VALUES (%s, %s, %s, %s, %s, %s)",
-            (event_name, event_location, event_summary, event_date, event_time, attendees_data)
+            "INSERT INTO callbot_event_registration (eventName, eventLocation, eventSummary, eventDate, eventTime, eventIndustry, attendees) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (event_name, event_location, event_summary, event_date, event_time, event_industry, attendees_data)
         )
         conn.commit()
         event_id = cursor.lastrowid

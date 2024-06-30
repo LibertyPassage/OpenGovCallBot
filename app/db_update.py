@@ -109,7 +109,9 @@ def create_table_if_not_exists(conn, table_name):
             Call_Type VARCHAR(50),
             Event_ID INT,
             Event_Summary TEXT,
-            Event_Time TIME
+            Event_Time TIME,
+            event_Industry VARCHAR(250),
+            attendee_EmailID TEXT
         )
     ''')
     conn.commit()
@@ -254,8 +256,8 @@ def insert_data_to_table(conn, df, table_name):
     """
     cursor = conn.cursor()
     insert_query = f'''
-        INSERT INTO {table_name} (GUID, Event_ID, Timestamp, Twilio_Number, Recipient_Number, Call_Status, Response, Attendee_Name, Event_Date, Event_Name, Event_Summary, Event_Time, Event_Venue, Call_Type)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO {table_name} (GUID, Event_ID, Timestamp, Twilio_Number, Recipient_Number, Call_Status, Response, Attendee_Name, Event_Date, Event_Name, Event_Summary, Event_Time, Event_Venue, Call_Type, event_Industry, attendee_EmailID)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     '''
     data = [tuple(None if pd.isna(x) else x for x in row) for row in df.itertuples(index=False)]
     cursor.executemany(insert_query, data)

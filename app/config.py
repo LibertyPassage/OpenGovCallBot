@@ -51,7 +51,6 @@ connect_str = secret_client.get_secret('connectstrblob').value
 
 client = Client(account_sid, auth_token)
 blob_service_client = BlobServiceClient.from_connection_string(connect_str)
-
 # MySQL database credentials
 config = {
     'host': secret_client.get_secret('dburl').value,
@@ -89,6 +88,7 @@ table8="callbot_response_callback_status"
 
 # Dev Blob storage container
 container_name = "opengovchatbot"
+
 
 
 # table4="callbot_response_declined_pickupdrop"

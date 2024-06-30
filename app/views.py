@@ -22,7 +22,7 @@ import logging
 from flask import flash, redirect, request, Response, jsonify, render_template, session, url_for
 
 from app.models import User
-from .db_connect import get_db_connection, create_table_if_not_exists
+from .db_connect import get_db_connection, create_table_if_not_exists,check_table_exists
 from .twilio_calls import make_call,call_guid_map
 from .utils import secure_filename, log_response
 import pandas as pd
@@ -46,6 +46,8 @@ logging.basicConfig(level=logging.DEBUG)
 # Initialize table flag
 table_initialized = True
 
+dict_emailId={}
+
 def index_view():
     """
     Renders the main HTML page and fetches events from the database.
@@ -57,13 +59,14 @@ def index_view():
     Returns:
         The rendered HTML template with the list of events.
     """
+    conn = get_db_connection()
     global table_initialized
     if not table_initialized:
         create_table_if_not_exists()
         table_initialized = True
 
     # Fetch events from the database
-    conn = get_db_connection()
+    
     if conn:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(f"SELECT eventID, eventName, eventLocation, eventDate FROM {registration_table}")
@@ -122,19 +125,6 @@ def save_event_view():
         event_industry = request.form.get('eventIndustry')
         attendees_file = request.files.get('attendeesFile')
 
-        # Replace commas with periods in event_summary
-        if event_summary:
-            event_summary = event_summary.replace(',', '.').replace("'", '')
-
-        if event_location:
-            event_location = event_location.replace("'", '')
-
-        if event_name:
-            event_name = event_name.replace("'", '')
-
-        if event_industry:
-            event_industry = event_industry.replace("'", '')
-
         # Restrict commas in event_name, event_location, and event_industry
         if ',' in event_name:
             return jsonify(status='error', message='Event Name must not contain commas.')
@@ -158,6 +148,20 @@ def save_event_view():
             return jsonify(status='error', message='Event industry name is a mandatory field.')
         if not attendees_file:
             return jsonify(status='error', message='Attendees file is a mandatory field.')
+        
+        # Replace commas with periods in event_summary
+        if event_summary:
+            event_summary = event_summary.replace(',', '.').replace("'", '').replace("’",'')
+
+        if event_location:
+            event_location = event_location.replace("'", '').replace("’",'')
+
+        if event_name:
+            event_name = event_name.replace("'", '').replace("’",'')
+
+        if event_industry:
+            event_industry = event_industry.replace("'", '').replace("’",'')
+
 
         if len(event_name) > 500:
             return jsonify(status='error', message='Event Name must not exceed 250 characters.')
@@ -246,9 +250,10 @@ def trigger_initial_call_view():
 
             if event:
                 # Parse attendees from the event details
-                attendees = event[6].split(';')
-                attendees = [{'attendeeName': a.split(':')[0], 'attendeePhone': a.split(':')[1]} for a in attendees]
-
+                attendees = event[7].split(';')
+                print("event_details",event)
+                attendees = [{'attendeeName': a.split(':')[0], 'attendeePhone': a.split(':')[1],'attendeeEmailID':a.split(':')[2]} for a in attendees]
+                
                 event_details = {
                     'eventName': event[1],
                     'eventSummary': event[3],
@@ -256,9 +261,10 @@ def trigger_initial_call_view():
                     'eventDate': event[4],
                     'eventTime': event[5],
                     'attendees': attendees,
-                    'event_id': event_id
+                    'event_id': event_id,
+                    'eventIndustry':event[6]
                 }
-
+                
                 # Convert the attendees list to a DataFrame
                 df_attendees = pd.DataFrame(attendees)
 
@@ -267,13 +273,15 @@ def trigger_initial_call_view():
                     make_call(
                         attendee_phonenumber=row["attendeePhone"],
                         attendee_name=row["attendeeName"],
+                        attendee_EmailID=row["attendeeEmailID"],
                         event_date=event_details.get('eventDate'),
                         event_name=event_details.get('eventName'),
                         event_summary=event_details.get('eventSummary'),
                         event_venue=event_details.get('eventLocation'),
                         eventTime=event_details.get('eventTime'),
                         call_type="initial",
-                        event_id=event_details.get('event_id')
+                        event_id=event_details.get('event_id'),
+                        event_Industry=event_details.get('eventIndustry'),
                     )
 
                 cursor.close()
@@ -289,13 +297,6 @@ def trigger_initial_call_view():
     except Exception as e:
         logging.error(f'Error occurred: {str(e)}')
         return jsonify(status='error', message='An error occurred while triggering the initial call. Please try again.')
-
-# @app.route('/trigger_reminder_call', methods=['POST'])
-from flask import request, jsonify
-import pandas as pd
-import logging
-
-logging.basicConfig(level=logging.INFO)
 
 def trigger_reminder_call_view():
     """
@@ -339,7 +340,9 @@ def trigger_reminder_call_view():
                         event_venue=row["Event_Venue"],
                         call_type='reminder',
                         event_id=row["Event_ID"],
-                        eventTime=row["Event_Time"]
+                        eventTime=row["Event_Time"],
+                        event_Industry=row["event_Industry"],
+                        attendee_EmailID=row["attendee_EmailID"]
                     )
                 
                 return jsonify(status='success', message='Reminder call triggered successfully')
@@ -372,19 +375,25 @@ def voice_view():
         event_id = request.args.get('eventId', 'eventId')
         eventTime = request.args.get('eventTime', 'eventTime')
         attendee_phonenumber = request.args.get('attendee_phonenumber', 'attendee_phonenumber')
+        attendee_EmailID = request.args.get('attendee_EmailID', 'attendee_EmailID')
+        event_Industry = request.args.get('event_Industry', 'event_Industry')
         first_name = attendee_name.split()[0]
         call_sid = request.values.get('CallSid')
         guid = call_guid_map.get(call_sid)
         resp = VoiceResponse()
         gather = Gather(action='/gather', num_digits=1)
         gather.say(
-            f"Hello {first_name}, This is the Open GOV AI calling on behalf of the organizing committee for an event. We are delighted to invite you to our upcoming event, {event_name}! Taking place on {event_date} at {eventTime} Malaysia Standard Time. This event promises to be an insightful experience held at {event_venue}. Here’s a brief overview: {event_summary}. We believe your presence will add immense value, and we would be honored to have you with us. To confirm your attendance, please press 1. If you need a callback for more details, press 2.",
+            f"Hello {first_name}, This is the Open GOV AI calling on behalf of the organizing committee for an event. We are contacting you to inform you that the {event_Industry} has requested our assistance in convening senior leaders to discuss {event_name}. Here is a brief overview: {event_summary}. Drawing on your prior participation in our Breakfast Insight Session, you can expect a similar format. Mohit will be moderating once again, ensuring the discussions are dynamic and interactive. The event will take place on {event_date} at {eventTime} Malaysian Standard Time, This event promises to be an insightful experience held at {event_venue}. We believe your presence will add immense value, and we would be honored to have you with us. To confirm your attendance, please press 1. If you need a callback, press 2.",
             voice=voice_change
         )
 
+        # updating dcitonary to refer email Id at other functions
+        global dict_emailId
+        dict_emailId[guid] = attendee_EmailID
+
         csv_blob_name = get_current_csv_blob_name()
         write_csv_header(csv_blob_name)
-        data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,InVoice,,{event_date},{event_name},{event_summary},{eventTime},{event_venue},\n"
+        data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,InVoice,,{event_date},{event_name},{event_summary},{eventTime},{event_venue},,{event_Industry},{attendee_EmailID}\n"
         append_to_blob(csv_blob_name, data)
 
         resp.append(gather)
@@ -430,7 +439,7 @@ def gather_view():
 
             csv_blob_name = get_current_csv_blob_name()
             write_csv_header(csv_blob_name)
-            data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Invite Accepted,,{event_date},{event_name},{event_summary},{event_time},{event_venue},\n"
+            data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Invite Accepted,,{event_date},{event_name},{event_summary},{event_time},{event_venue},,,\n"
             append_to_blob(csv_blob_name, data)
 
             log_response('Invite Accepted')
@@ -442,7 +451,7 @@ def gather_view():
 
             csv_blob_name = get_current_csv_blob_name()
             write_csv_header(csv_blob_name)
-            data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Request Callback,,{event_date},{event_name},{event_summary},{event_time},{event_venue},\n"
+            data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Request Callback,,{event_date},{event_name},{event_summary},{event_time},{event_venue},,,\n"
             append_to_blob(csv_blob_name, data)
 
             log_response('Request Callback')
@@ -456,7 +465,7 @@ def gather_view():
                 
                 csv_blob_name = get_current_csv_blob_name()
                 write_csv_header(csv_blob_name)
-                data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Invalid option attempt {attempt_count + 1},,{event_date},{event_name},{event_summary},{event_time},{event_venue},\n"
+                data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Invalid option attempt {attempt_count + 1},,{event_date},{event_name},{event_summary},{event_time},{event_venue},,,\n"
                 append_to_blob(csv_blob_name, data)
 
         return str(resp)
@@ -492,6 +501,7 @@ def gather2_view():
         call_sid = request.values.get('CallSid')
         guid = call_guid_map.get(call_sid)
         attempt_count = int(request.args.get('attempt_count', 0))
+        attendee_EmailID = dict_emailId.get(guid)
 
         if digit == '1':
             gather = Gather(action='/gather3', num_digits=1)
@@ -503,19 +513,19 @@ def gather2_view():
 
             csv_blob_name = get_current_csv_blob_name()
             write_csv_header(csv_blob_name)
-            data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Pickup and Drop Accepted,,{event_date},{event_name},{event_summary},{event_time},{event_venue},\n"
+            data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Pickup and Drop Accepted,,{event_date},{event_name},{event_summary},{event_time},{event_venue},,,\n"
             append_to_blob(csv_blob_name, data)
 
             log_response('Pickup and Drop Accepted')
         elif digit == '2':
             resp.say(
-                "You have selected a parking coupon. It will be arranged for you. Thank you, and Good day!",
+                f"You have selected a parking coupon. It will be arranged for you and sent to your email address at {attendee_EmailID}. Thank you, and Good day!",
                 voice=voice_change
             )
 
             csv_blob_name = get_current_csv_blob_name()
             write_csv_header(csv_blob_name)
-            data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,parking coupon,,{event_date},{event_name},{event_summary},{event_time},{event_venue},\n"
+            data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,parking coupon,,{event_date},{event_name},{event_summary},{event_time},{event_venue},,,\n"
             append_to_blob(csv_blob_name, data)
 
             log_response('parking coupon')
@@ -529,7 +539,7 @@ def gather2_view():
                 
                 csv_blob_name = get_current_csv_blob_name()
                 write_csv_header(csv_blob_name)
-                data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Invalid option,,{event_date},{event_name},{event_summary},{event_time},{event_venue},\n"
+                data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Invalid option,,{event_date},{event_name},{event_summary},{event_time},{event_venue},,,\n"
                 append_to_blob(csv_blob_name, data)
 
         return str(resp)
@@ -571,7 +581,7 @@ def gather3_view():
 
             csv_blob_name = get_current_csv_blob_name()
             write_csv_header(csv_blob_name)
-            data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Office Address,,{event_date},{event_name},{event_summary},{event_time},{event_venue},\n"
+            data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Office Address,,{event_date},{event_name},{event_summary},{event_time},{event_venue},,,\n"
             append_to_blob(csv_blob_name, data)
 
             log_response('Office Address')
@@ -583,7 +593,7 @@ def gather3_view():
 
             csv_blob_name = get_current_csv_blob_name()
             write_csv_header(csv_blob_name)
-            data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Home Address,,{event_date},{event_name},{event_summary},{event_time},{event_venue},\n"
+            data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Home Address,,{event_date},{event_name},{event_summary},{event_time},{event_venue},,,\n"
             append_to_blob(csv_blob_name, data)
 
             log_response('Home Address')
@@ -597,7 +607,7 @@ def gather3_view():
 
                 csv_blob_name = get_current_csv_blob_name()
                 write_csv_header(csv_blob_name)
-                data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Invalid option,,{event_date},{event_name},{event_summary},{event_time},{event_venue},\n"
+                data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,Invalid option,,{event_date},{event_name},{event_summary},{event_time},{event_venue},,,\n"
                 append_to_blob(csv_blob_name, data)
 
         return str(resp)
@@ -638,7 +648,7 @@ def status_view():
         write_csv_header(csv_blob_name)  # Ensure the CSV header is written if necessary
 
         # Create a data string with GUID, timestamp, Twilio number, recipient number, and call status
-        data = f"{guid},,{timestamp},{twilio_number},{request.values.get('To')},{call_status},\n"
+        data = f"{guid},,{timestamp},{twilio_number},{request.values.get('To')},{call_status},,,\n"
         append_to_blob(csv_blob_name, data)  # Append the data string to the CSV blob
 
         if call_status == 'completed':
@@ -674,6 +684,8 @@ def reminder_view():
             event_summary = request.args.get('summary', 'Summary')  # Event summary
             event_venue = request.args.get('venue', 'the designated venue')  # Event venue
             event_id = request.args.get('eventId', 'eventId')  # Event ID
+            event_Industry=request.args.get('event_Industry','event_Industry')
+            attendee_EmailID = request.args.get('attendee_EmailID', 'attendee_EmailID')
             attendee_phonenumber = request.args.get('attendee_phonenumber', 'attendee_phonenumber')  # Attendee's phone number
     
             # Retrieve the GUID associated with the call SID
@@ -683,7 +695,7 @@ def reminder_view():
             # Create a Twilio VoiceResponse for the reminder
             resp = VoiceResponse()
             resp.say(
-                f"Hello {first_name}, as a valued registered participant, this is a reminder from the OpenGov AI call bot regarding the upcoming event, {event_name}. scheduled date {event_date} at {event_time} Malaysia Standard Time. To be held at {event_venue}. I want to remind you that Failure to attend for the entire duration (without replacement) will result in a US$495 non-attendance fee. This fee covers the costs incurred for the delegate materials, food, and the opportunity cost of allocating the pass to someone else. Thank you for your time. We look forward to seeing you at {event_name}. Have a wonderful day!",
+                f"Hello {first_name}, as a valued registered participant, this is a reminder from the OpenGov AI call bot regarding the upcoming event, {event_name}. scheduled date {event_date} at {event_time} Malaysian Standard Time. To be held at {event_venue}. I want to remind you that Failure to attend for the entire duration (without replacement) will result in a US$495 non-attendance fee. This fee covers the costs incurred for the delegate materials, food, and the opportunity cost of allocating the pass to someone else. Thank you for your time. We look forward to seeing you at {event_name}. Good day!",
                 voice=voice_change
             )
     
@@ -695,7 +707,7 @@ def reminder_view():
             data = (
                 f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},"
                 f"{attendee_phonenumber},initiated,Reminder Completed,,{event_date},{event_name},"
-                f"{event_summary},{event_time},{event_venue},\n"
+                f"{event_summary},{event_time},{event_venue},,{event_Industry},{attendee_EmailID}\n"
             )
             append_to_blob(csv_blob_name, data)  # Append the data string to the CSV blob
     
@@ -736,7 +748,9 @@ def trigger_callback_view():
                         event_venue=row["Event_Venue"],
                         call_type='callback',
                         event_id=row["Event_ID"],
-                        eventTime=row["Event_Time"]
+                        eventTime=row["Event_Time"],
+                        event_Industry=row["event_Industry"],
+                        attendee_EmailID=row["attendee_EmailID"]
                     )
                     print('deleting the GUID',row["GUID"])
                     # Remove the record from callback table since call back request trigger is completed
@@ -776,6 +790,8 @@ def voice_callback_view():
         event_venue = request.args.get('venue', 'the designated venue')
         event_id = request.args.get('eventId', 'eventId')
         eventTime = request.args.get('eventTime', 'eventTime')
+        attendee_EmailID = request.args.get('attendee_EmailID', 'attendee_EmailID')
+        event_Industry = request.args.get('event_Industry', 'event_Industry')
         attendee_phonenumber = request.args.get('attendee_phonenumber', 'attendee_phonenumber')
         first_name = attendee_name.split()[0]
         call_sid = request.values.get('CallSid')
@@ -783,13 +799,13 @@ def voice_callback_view():
         resp = VoiceResponse()
         gather = Gather(action='/gather', num_digits=1)
         gather.say(
-            f"Hello {first_name}, This is the Open GOV AI calling on behalf of the organizing committee for an event. Since you have requested call back. we are delighted to invite you to our upcoming event, {event_name}! Taking place on {event_date} at {eventTime} Malaysia Standard Time. This event promises to be an insightful experience held at {event_venue}. Here’s a brief overview: {event_summary}. We believe your presence will add immense value, and we would be honored to have you with us. To confirm your attendance, please press 1. If you need a callback for more details, press 2.",
+            f"Hello {first_name}, This is the Open GOV AI calling on behalf of the organizing committee for an event. Since you have requested call back. We are contacting you to inform you that the {event_Industry} has requested our assistance in convening senior leaders to discuss {event_name}. Here is a brief overview: {event_summary}. Drawing on your prior participation in our Breakfast Insight Session, you can expect a similar format. Mohit will be moderating once again, ensuring the discussions are dynamic and interactive. The event will take place on {event_date} at {eventTime} Malaysia Standard Time, This event promises to be an insightful experience held at {event_venue}. We believe your presence will add immense value, and we would be honored to have you with us. To confirm your attendance, please press 1. If you need a callback, press 2.",
             voice=voice_change
         )
 
         csv_blob_name = get_current_csv_blob_name()
         write_csv_header(csv_blob_name)
-        data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,InVoice,,{event_date},{event_name},{event_summary},{eventTime},{event_venue},\n"
+        data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,InVoice,,{event_date},{event_name},{event_summary},{eventTime},{event_venue},,{event_Industry},{attendee_EmailID}\n"
         append_to_blob(csv_blob_name, data)
 
         resp.append(gather)

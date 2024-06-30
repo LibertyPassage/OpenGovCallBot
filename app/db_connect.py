@@ -81,13 +81,37 @@ def create_table_if_not_exists():
         conn.commit()
 
         # Check if the column 'eventIndustry' exists
-        cursor.execute(f"SHOW COLUMNS FROM {registration_table} LIKE 'eventIndustry'")
-        result = cursor.fetchone()
-        if not result:
-            cursor.execute(f"ALTER TABLE {registration_table} ADD COLUMN eventIndustry VARCHAR(500) NOT NULL")
-            conn.commit()
+        # cursor.execute(f"SHOW COLUMNS FROM {registration_table} LIKE 'eventIndustry'")
+        # result = cursor.fetchone()
+        # if not result:
+        #     cursor.execute(f"ALTER TABLE {registration_table} ADD COLUMN eventIndustry VARCHAR(500) NOT NULL")
+        #     conn.commit()
 
         cursor.close()
         conn.close()
     else:
         print("Error: Could not establish a connection to the database")
+
+
+def check_table_exists(cursor, table_name):
+    """
+    connects to db and find out the table name.
+    returns: boolen to understand existance of the registration_table i.e. callbot_event_registration
+
+    """
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM information_schema.tables
+        WHERE table_schema = %s
+        AND table_name = %s
+    """, (config['database'], table_name))
+    return cursor.fetchall()[0] == 1
+
+# logic to create the first table if not exist in connected db
+conn = get_db_connection()
+cursor = conn.cursor(dictionary=True)
+
+if not check_table_exists(cursor, registration_table):
+    create_table_if_not_exists()
+else:
+    print(f"Table {registration_table} already exists.")

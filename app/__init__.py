@@ -29,7 +29,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # Initialize the database
 db = SQLAlchemy(app)
 # Import the routes and models
-from app import routes, models
+from app import routes, models, db_connect
 with app.app_context():
     db.create_all()
 

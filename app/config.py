@@ -63,7 +63,7 @@ config = {
 twilio_number = '+13202722061'
 
 # Voice change string
-voice_change = "Polly.Aditi"
+voice_change = "Polly.Joanna"
 
 
 #--------------------------------------------------------------------------------------------------------
@@ -116,6 +116,5 @@ container_name = "opengovchatbot"
 
 # # PROD Blob storage container
 # container_name = "opengovcallbot-prod"
-
 
 # table4="callbot_response_declined_pickupdrop_PROD"

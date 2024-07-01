@@ -67,8 +67,8 @@ def create_table_if_not_exists():
         cursor = conn.cursor()
         cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS {registration_table} (
-                eventID INT AUTO_INCREMENT PRIMARY KEY,
-                eventName VARCHAR(500) NOT NULL UNIQUE,
+                eventID INT AUTO_INCREMENT PRIMARY KEY UNIQUE,
+                eventName VARCHAR(500) NOT NULL,
                 eventLocation VARCHAR(500) NOT NULL,
                 eventSummary TEXT NOT NULL,
                 eventDate VARCHAR(50) NOT NULL,

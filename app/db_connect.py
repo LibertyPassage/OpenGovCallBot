@@ -51,11 +51,12 @@ def get_db_connection():
 def create_table_if_not_exists():
     """
     Creates the `callbot_event_registration` table in the MySQL database if it does not already exist.
+    Alters the table to add the `eventIndustry` column if it does not already exist.
 
     The table includes columns for event details such as event ID, name, location, summary, date, time,
-    attendees, and the insertion timestamp.
+    attendees, industry, and the insertion timestamp.
 
-    This function establishes a connection to the MySQL database and creates the table using SQL `CREATE TABLE IF NOT EXISTS`.
+    This function establishes a connection to the MySQL database and creates/alters the table using SQL.
     If the connection cannot be established, an error message is printed.
 
     Raises:
@@ -66,18 +67,51 @@ def create_table_if_not_exists():
         cursor = conn.cursor()
         cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS {registration_table} (
-                eventID INT AUTO_INCREMENT PRIMARY KEY,
-                eventName VARCHAR(500) NOT NULL UNIQUE,
+                eventID INT AUTO_INCREMENT PRIMARY KEY UNIQUE,
+                eventName VARCHAR(500) NOT NULL,
                 eventLocation VARCHAR(500) NOT NULL,
                 eventSummary TEXT NOT NULL,
                 eventDate VARCHAR(50) NOT NULL,
                 eventTime VARCHAR(50) NOT NULL,
+                eventIndustry VARCHAR(500) NOT NULL,
                 attendees TEXT NOT NULL,
                 insert_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         conn.commit()
+
+        # Check if the column 'eventIndustry' exists
+        # cursor.execute(f"SHOW COLUMNS FROM {registration_table} LIKE 'eventIndustry'")
+        # result = cursor.fetchone()
+        # if not result:
+        #     cursor.execute(f"ALTER TABLE {registration_table} ADD COLUMN eventIndustry VARCHAR(500) NOT NULL")
+        #     conn.commit()
+
         cursor.close()
         conn.close()
     else:
         print("Error: Could not establish a connection to the database")
+
+
+def check_table_exists(cursor, table_name):
+    """
+    connects to db and find out the table name.
+    returns: boolen to understand existance of the registration_table i.e. callbot_event_registration
+
+    """
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM information_schema.tables
+        WHERE table_schema = %s
+        AND table_name = %s
+    """, (config['database'], table_name))
+    return cursor.fetchall()[0] == 1
+
+# logic to create the first table if not exist in connected db
+conn = get_db_connection()
+cursor = conn.cursor(dictionary=True)
+
+if not check_table_exists(cursor, registration_table):
+    create_table_if_not_exists()
+else:
+    print(f"Table {registration_table} already exists.")

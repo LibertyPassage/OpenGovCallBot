@@ -39,10 +39,8 @@ secret_client = SecretClient(vault_url=vault_url, credential=credential)
 # secret_name = "twilioaccountsid1"
 account_sid = secret_client.get_secret("twilioaccountsid1").value
 
-
 # secret_name='twilioauthtoken'
 auth_token = secret_client.get_secret('twilioauthtoken').value
-
 
 app_secretkey=secret_client.get_secret("appsecretkey").value
 
@@ -50,12 +48,9 @@ init_AppConfig=secret_client.get_secret("initAppConfig").value
 
 # Azure Blob Storage credentials
 connect_str = secret_client.get_secret('connectstrblob').value
-container_name = "opengovchatbot"
 
 client = Client(account_sid, auth_token)
 blob_service_client = BlobServiceClient.from_connection_string(connect_str)
-
-
 # MySQL database credentials
 config = {
     'host': secret_client.get_secret('dburl').value,
@@ -67,36 +62,59 @@ config = {
 # Twilio credentials
 twilio_number = '+13202722061'
 
-# Dev URL
-# ngrok_url = 'https://a2f5-2401-4900-1cb9-157a-c92e-88b7-cf52-b03.ngrok-free.app'
-
-# PROD URL
-ProdURL = secret_client.get_secret('ProdURL').value
-ngrok_url = ProdURL
-
 # Voice change string
-voice_change = "Polly.Aditi"
+voice_change = "Polly.Joanna"
+
+
+#--------------------------------------------------------------------------------------------------------
+# Dev setup
+#--------------------------------------------------------------------------------------------------------
+
+# Dev URL
+ngrok_url = 'https://4738-122-171-19-130.ngrok-free.app'
 
 # Dev tables to handle the buckets
 registration_table="callbot_event_registration"
-
-# PROD tables to handle the buckets
-# registration_table="callbot_event_registration_PROD"
 
 # Dev tables to handle the buckets
 table1="callbot_response_callback"
 table2="callbot_response_accepted"
 table3="callbot_response_accepted_pickupdrop"
-table4="callbot_response_declined_pickupdrop"
+table4="callbot_response_parking_coupon"
 table5="callbot_response_invalidoptioninput"
 table6="callbot_response_noanswer"
 table7="callbot_reminder_status"
+table8="callbot_response_callback_status"
 
-# PROD tables to handle the buckets
+# Dev Blob storage container
+container_name = "opengovchatbot"
+
+
+
+# table4="callbot_response_declined_pickupdrop"
+
+#--------------------------------------------------------------------------------------------------------
+# PROD setup
+#--------------------------------------------------------------------------------------------------------
+
+# # PROD URL
+# ProdURL = secret_client.get_secret('ProdURL').value
+# ngrok_url = ProdURL
+
+# # PROD tables to handle the buckets
+# registration_table="callbot_event_registration_PROD"
+
+# # PROD tables to handle the buckets
 # table1="callbot_response_callback_PROD"
 # table2="callbot_response_accepted_PROD"
 # table3="callbot_response_accepted_pickupdrop_PROD"
-# table4="callbot_response_declined_pickupdrop_PROD"
+# table4="callbot_response_parking_coupon_PROD"
 # table5="callbot_response_invalidoptioninput_PROD"
 # table6="callbot_response_noanswer_PROD"
 # table7="callbot_reminder_status_PROD"
+# table8="callbot_response_callback_status_PROD"
+
+# # PROD Blob storage container
+# container_name = "opengovcallbot-prod"
+
+# table4="callbot_response_declined_pickupdrop_PROD"

@@ -20,23 +20,26 @@ DEV tables to handle the buckets
 1. table1 = `callbot_response_callback`;
 2. table2 = `callbot_response_accepted`;
 3. table3 = `callbot_response_accepted_pickupdrop`;
-4. table4 = `callbot_response_declined_pickupdrop`;
+4. table4 = `callbot_response_parking_coupon`;
 5. table5 = `callbot_response_invalidoptioninput`;
 6. table6 = `callbot_response_noanswer`;
 7. table7 = `callbot_reminder_status`;
+8. table8 =  `callbot_response_callback_status`;
 
 PROD tables to handle the buckets
 1. table1="callbot_response_callback_PROD"
 2. table2="callbot_response_accepted_PROD"
 3. table3="callbot_response_accepted_pickupdrop_PROD"
-4. table4="callbot_response_declined_pickupdrop_PROD"
+4. table4="callbot_response_parking_coupon_PROD"
 5. table5="callbot_response_invalidoptioninput_PROD"
 6. table6="callbot_response_noanswer_PROD"
 7. table7="callbot_reminder_status_PROD"
+8. table8="callbot_response_callback_status_PROD";
 
 """
 
 import pandas as pd
+import logging
 from azure.storage.blob import BlobServiceClient
 import mysql.connector
 from mysql.connector import errorcode
@@ -44,7 +47,7 @@ from io import StringIO
 import warnings
 from datetime import datetime
 import sys
-from .config import table1, table2, table3, table4, table5, table6, table7, config, connect_str, container_name
+from .config import table1, table2, table3, table4, table5, table6, table7, table8, config, connect_str, container_name
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
@@ -106,7 +109,9 @@ def create_table_if_not_exists(conn, table_name):
             Call_Type VARCHAR(50),
             Event_ID INT,
             Event_Summary TEXT,
-            Event_Time TIME
+            Event_Time TIME,
+            event_Industry VARCHAR(250),
+            attendee_EmailID TEXT
         )
     ''')
     conn.commit()
@@ -181,32 +186,36 @@ def download_blob_to_df():
         sys.exit()  # Exit if the DataFrame is empty or has insufficient data
     
     value_Callback = df.loc[df['Response'] == 'Request Callback', 'GUID'].values
-    accepted_lst = get_db_df(conn, table_name='callbot_response_callback', lst=value_Callback)
+    accepted_lst = get_db_df(conn, table_name=table1, lst=value_Callback)
     Result_Callback = create_df(lst=accepted_lst, df=df, string='Request Callback')
     
     value_accepted = df.loc[df['Response'] == 'Invite Accepted', 'GUID'].values
-    accepted_lst = get_db_df(conn, table_name='callbot_response_accepted', lst=value_accepted)
+    accepted_lst = get_db_df(conn, table_name=table2, lst=value_accepted)
     Result_accepted = create_df(lst=accepted_lst, df=df, string='Invite Accepted')
 
     value_pickup_accepted = df.loc[df['Response'] == 'Pickup and Drop Accepted', 'GUID']
-    accepted_lst = get_db_df(conn, table_name='callbot_response_accepted_pickupdrop', lst=value_pickup_accepted)
+    accepted_lst = get_db_df(conn, table_name=table3, lst=value_pickup_accepted)
     Result_pickup_accepted = create_df(lst=accepted_lst, df=df, string='Pickup and Drop Accepted')
     
-    value_pickup_declined = df.loc[df['Response'] == 'Pickup and Drop Declined', 'GUID'].values
-    accepted_lst = get_db_df(conn, table_name='callbot_response_declined_pickupdrop', lst=value_pickup_declined)
-    Result_pickup_declinded = create_df(lst=accepted_lst, df=df, string='Pickup and Drop Declined')
+    value_pickup_declined = df.loc[df['Response'] == 'parking coupon', 'GUID'].values
+    accepted_lst = get_db_df(conn, table_name=table4, lst=value_pickup_declined)
+    Result_pickup_declinded = create_df(lst=accepted_lst, df=df, string='parking coupon')
 
     value_invalidoptioninput = df.loc[df['Response'] == 'Invalid option', 'GUID'].values
-    accepted_lst = get_db_df(conn, table_name='callbot_response_invalidoptioninput', lst=value_invalidoptioninput)
+    accepted_lst = get_db_df(conn, table_name=table5, lst=value_invalidoptioninput)
     Result_invalidoptioninput = create_df(lst=accepted_lst, df=df, string='Invalid option')
 
-    value_NoAnswer = df.loc[df['Call Status'] == 'no-answer', 'GUID'].values
-    accepted_lst = get_db_df(conn, table_name='callbot_response_noanswer', lst=value_NoAnswer)
+    value_NoAnswer = df.loc[df['Call Status'].isin(['no-answer', 'busy']), 'GUID'].values
+    accepted_lst = get_db_df(conn, table_name=table6, lst=value_NoAnswer)
     Result_NoAnswer = create_df(lst=accepted_lst, df=df, string='no-answer')
-    
+
     value_reminder = df.loc[df['Call Type'] == 'reminder', 'GUID'].values
-    accepted_lst = get_db_df(conn, table_name='callbot_reminder_status', lst=value_reminder)
+    accepted_lst = get_db_df(conn, table_name=table7, lst=value_reminder)
     Result_reminder = create_df(lst=accepted_lst, df=df, string='reminder')
+
+    value_callback_status = df.loc[df['Call Type'] == 'callback', 'GUID'].values
+    accepted_lst = get_db_df(conn, table_name=table8, lst=value_callback_status)
+    Result_callback_status = create_df(lst=accepted_lst, df=df, string='callback')
     
     return {
         table1: Result_Callback,
@@ -215,8 +224,30 @@ def download_blob_to_df():
         table4: Result_pickup_declinded,
         table5: Result_invalidoptioninput,
         table6: Result_NoAnswer,
-        table7: Result_reminder
+        table7: Result_reminder,
+        table8: Result_callback_status
     }
+
+def delete_confirmed_attendees():
+    try:
+        conn = get_db_connection()
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute(f"SELECT GUID FROM {table8}")
+            GUID_callback_confirmed = set(cursor.fetchall())
+
+            cursor.execute(f"SELECT GUID FROM {table2}")
+            GUID_accepted = set(cursor.fetchall())
+            
+            common_elements = list(GUID_accepted.intersection(GUID_callback_confirmed))
+            
+            for element in common_elements:
+                cursor.execute(f"DELETE FROM {table1} WHERE GUID = %s",element)
+            
+            cursor.close()
+            conn.close()
+    except Exception as e:
+        logging.error(f'Error occurred: {str(e)}')
 
 # Insert data into the table
 def insert_data_to_table(conn, df, table_name):
@@ -225,8 +256,8 @@ def insert_data_to_table(conn, df, table_name):
     """
     cursor = conn.cursor()
     insert_query = f'''
-        INSERT INTO {table_name} (GUID, Event_ID, Timestamp, Twilio_Number, Recipient_Number, Call_Status, Response, Attendee_Name, Event_Date, Event_Name, Event_Summary, Event_Time, Event_Venue, Call_Type)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO {table_name} (GUID, Event_ID, Timestamp, Twilio_Number, Recipient_Number, Call_Status, Response, Attendee_Name, Event_Date, Event_Name, Event_Summary, Event_Time, Event_Venue, Call_Type, event_Industry, attendee_EmailID)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     '''
     data = [tuple(None if pd.isna(x) else x for x in row) for row in df.itertuples(index=False)]
     cursor.executemany(insert_query, data)

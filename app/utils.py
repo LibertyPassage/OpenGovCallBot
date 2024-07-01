@@ -24,7 +24,7 @@ from flask import request
 from .blob_operations import write_csv_header
 from .twilio_calls import call_guid_map
 import csv
-from .config import twilio_number
+from .config import twilio_number, blob_service_client,container_name
 from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
 import io
 from functools import wraps
@@ -32,11 +32,6 @@ from flask import session, redirect, url_for
 
 # Define CSV file path and lock
 csv_lock = threading.Lock()
-
-# Azure Blob Storage configurations
-AZURE_CONNECTION_STRING = 'your_connection_string'
-AZURE_CONTAINER_NAME = 'your_container_name'
-
 
 def login_required(f):
     """
@@ -104,9 +99,9 @@ def upload_blob(file_name, data):
         None
     """
     try:
-        blob_service_client = BlobServiceClient.from_connection_string(AZURE_CONNECTION_STRING)
-        blob_client = blob_service_client.get_blob_client(container=AZURE_CONTAINER_NAME, blob=file_name)
-        blob_client.upload_blob(data, blob_type="AppendBlob")
+        # blob_service_client = BlobServiceClient.from_connection_string(AZURE_CONNECTION_STRING)
+        blob_client = blob_service_client.get_blob_client(container=container_name, blob=file_name)
+        blob_client.upload_blob(data)
     except Exception as e:
         logging.error(f"Error uploading blob: {e}")
 
@@ -154,7 +149,7 @@ def log_response(response):
         # Log the written CSV entry for auditing
         logging.info(
             f"Written to CSV: GUID: {guid}, Event ID: {event_id}, Timestamp: {timestamp}, "
-            f"Twilio Number: {twilio_number}, To: {request.values.get('To')}, Status: 'In Progress', Response: {response}"
+            f"Twilio Number: {twilio_number}, To: {request.values.get('To')}, Status: 'In Progress', Response: {response},,,,,,,,,"
         )
     except Exception as e:
         logging.error(f"Error in log_response: {e}")

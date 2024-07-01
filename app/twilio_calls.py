@@ -53,7 +53,7 @@ def get_current_csv_blob_name():
 
 
 
-def make_call(attendee_phonenumber, attendee_name, event_name, event_summary, event_date, event_venue, call_type, event_id, eventTime):
+def make_call(attendee_phonenumber, attendee_name, event_name, event_summary, event_date, event_venue, call_type, event_id, eventTime,event_Industry,attendee_EmailID):
     """
     Initiates a phone call using Twilio's API to notify an attendee about an event.
 
@@ -82,6 +82,8 @@ def make_call(attendee_phonenumber, attendee_name, event_name, event_summary, ev
             url = base_url + 'voice'
         elif call_type == 'reminder':
             url = base_url + 'reminder'
+        elif call_type == 'callback':
+            url = base_url + 'voice_callback'
         else:
             return "Invalid call type."
 
@@ -94,7 +96,9 @@ def make_call(attendee_phonenumber, attendee_name, event_name, event_summary, ev
             'venue': event_venue,
             'eventId': event_id,
             'eventTime': eventTime,
-            'attendee_phonenumber': attendee_phonenumber
+            'attendee_phonenumber': attendee_phonenumber,
+            'attendee_EmailID':attendee_EmailID,
+            'event_Industry':event_Industry
         }
         encoded_params = urllib.parse.urlencode(query_params)
         full_url = f"{url}?{encoded_params}"
@@ -118,11 +122,8 @@ def make_call(attendee_phonenumber, attendee_name, event_name, event_summary, ev
         # Log the initial call to the CSV
         csv_blob_name = get_current_csv_blob_name()
         write_csv_header(csv_blob_name)
-        data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,,{attendee_name},{event_date},{event_name},{event_summary},{eventTime},{event_venue},{call_type}\n"
+        data = f"{guid},{event_id},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')},{twilio_number},{attendee_phonenumber},initiated,,{attendee_name},{event_date},{event_name},{event_summary},{eventTime},{event_venue},{call_type},{event_Industry},{attendee_EmailID}\n"
         append_to_blob(csv_blob_name, data)
-
-        # Run the blob update script (if needed)
-        # subprocess.run(['python', 'blob_update.py'])
 
         return f"Call initiated. Call SID: {call.sid}"
 

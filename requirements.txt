@@ -19,3 +19,5 @@ werkzeug
 openpyxl
 requests
 flask_sqlalchemy
+Flask-MySQLdb
+Flask-SQLAlchemy

@@ -45,7 +45,7 @@ def write_csv_header(blob_name):
             if not blob_client.exists():
                 header = ['GUID','eventID', 'Timestamp', 'Twilio Number', 'Recipient Number', 'Call Status', 
                           'Response', 'Attendee Name', 'Event Date', 'Event Name','Event Summary','Event Time', 
-                          'Event Venue', 'Call Type']
+                          'Event Venue', 'Call Type','event Industry','attendee EmailID']
                 blob_client.upload_blob(','.join(header) + '\n', overwrite=True)
         except Exception as e:
             logging.error(f"Error writing CSV header: {e}")
